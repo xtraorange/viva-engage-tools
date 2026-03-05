@@ -193,28 +193,76 @@ def create_app():
             return redirect(url_for("index"))
         app.config["updating"] = True
         app.config["update_status"] = "Starting update..."
+        app.config["update_output"] = []
         def updater():
             try:
-                app.config["update_status"] = "Pulling latest code..."
-                subprocess.run(["git", "pull"], cwd=base, capture_output=True, text=True, check=True)
+                # stash any local changes (including config) so pull can succeed
+                app.config["update_status"] = "Stashing local modifications..."
+                app.config["update_output"].append("$ git stash push -u -m jampy-update")
+                st = subprocess.run(["git", "stash", "push", "-u", "-m", "jampy-update"], cwd=base, capture_output=True, text=True, timeout=30)
+                if st.stdout:
+                    app.config["update_output"].append(st.stdout.strip())
+                if st.stderr:
+                    app.config["update_output"].append(st.stderr.strip())
+                
+                app.config["update_status"] = "Fetching latest code..."
+                app.config["update_output"].append("$ git pull --ff-only")
+                result = subprocess.run(["git", "pull", "--ff-only"], cwd=base, capture_output=True, text=True, timeout=60, check=True)
+                if result.stdout:
+                    app.config["update_output"].append(result.stdout.strip())
+                if result.stderr:
+                    app.config["update_output"].append(result.stderr.strip())
+                
+                # restore stash
+                app.config["update_status"] = "Restoring local changes..."
+                app.config["update_output"].append("$ git stash pop")
+                pop = subprocess.run(["git", "stash", "pop"], cwd=base, capture_output=True, text=True, timeout=30)
+                if pop.stdout:
+                    app.config["update_output"].append(pop.stdout.strip())
+                if pop.stderr:
+                    app.config["update_output"].append(pop.stderr.strip())
+                
                 app.config["update_status"] = "Installing dependencies..."
-                subprocess.run([sys.executable, "-m", "pip", "install", "-r", "requirements.txt"], cwd=base, capture_output=True, text=True, check=True)
+                app.config["update_output"].append(f"$ {sys.executable} -m pip install -r requirements.txt")
+                result = subprocess.run([sys.executable, "-m", "pip", "install", "-r", "requirements.txt"], cwd=base, capture_output=True, text=True, timeout=120, check=True)
+                if result.stdout:
+                    app.config["update_output"].append(result.stdout.strip())
+                if result.stderr:
+                    app.config["update_output"].append(result.stderr.strip())
+                
                 app.config["update_status"] = "Update complete! Please restart the app."
+                app.config["update_output"].append("✓ Update successful. Please restart the application.")
+            except subprocess.TimeoutExpired:
+                app.config["update_error"] = "Update timed out. Check your network and try again."
+                app.config["update_status"] = "Update timed out."
+                app.config["update_output"].append("✗ Operation timed out")
             except subprocess.CalledProcessError as e:
-                msg = f"Command '{e.cmd}' failed (exit {e.returncode})"
+                msg = f"Command failed (exit {e.returncode})"
+                app.config["update_output"].append(f"✗ {msg}")
                 if e.stdout:
-                    msg += f"\nstdout: {e.stdout.strip()}"
+                    app.config["update_output"].append("STDOUT: " + e.stdout.strip())
                 if e.stderr:
-                    msg += f"\nstderr: {e.stderr.strip()}"
+                    app.config["update_output"].append("STDERR: " + e.stderr.strip())
                 app.config["update_error"] = msg
-                app.config["update_status"] = "Update failed. See error below."
+                app.config["update_status"] = "Update failed."
             except Exception as e:
                 app.config["update_error"] = str(e)
                 app.config["update_status"] = "Update failed."
+                app.config["update_output"].append(f"✗ Error: {str(e)}")
             finally:
                 app.config["updating"] = False
         threading.Thread(target=updater, daemon=True).start()
         return redirect(url_for("index"))
+    
+    @app.route("/api/update-status")
+    def update_status_api():
+        """Return current update status and output for live polling"""
+        return jsonify({
+            "updating": app.config.get("updating", False),
+            "status": app.config.get("update_status", ""),
+            "output": app.config.get("update_output", []),
+            "error": app.config.get("update_error", "")
+        })
 
     @app.route("/groups")
     def groups():

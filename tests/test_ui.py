@@ -97,6 +97,35 @@ def test_force_bypasses_cache(monkeypatch, client, tmp_path):
     yaml.safe_dump(cfg2, open(general_path, "w"))
 
 
+def test_update_stashes_changes(monkeypatch, client):
+    """perform_update should stash local modifications and pop afterwards"""
+    from threading import Event
+    from types import SimpleNamespace
+    calls = []
+    
+    def fake_run(cmd, cwd=None, capture_output=False, text=False, timeout=None, check=False):
+        calls.append(cmd)
+        # simulate normal completed process
+        return SimpleNamespace(stdout="ok", stderr="")
+
+    monkeypatch.setattr('src.ui.subprocess.run', fake_run)
+
+    # trigger update
+    rv = client.post('/update')
+    assert rv.status_code == 302
+    # wait until updating flag clears
+    import time
+    while True:
+        status = client.get('/api/update-status').get_json()
+        if not status['updating']:
+            break
+        time.sleep(0.1)
+    # ensure stash/pull/pop commands invoked
+    assert ['git', 'stash', 'push', '-u', '-m', 'jampy-update'] in calls
+    assert ['git', 'pull', '--ff-only'] in calls
+    assert ['git', 'stash', 'pop'] in calls
+
+
 def test_query_builder_routes(client):
     # Test query builder page loads
     response = client.get("/query-builder")

@@ -51,7 +51,7 @@
   
   {% if updating %}
   <div class="position-fixed top-0 start-0 w-100 h-100 d-flex align-items-center justify-content-center" style="background-color: rgba(0, 0, 0, 0.5); z-index: 9999;">
-    <div class="card text-center p-5" style="min-width: 400px;">
+    <div class="card text-center p-5" style="min-width: 500px; max-height: 80vh; overflow-y: auto;">
       <div class="mb-3">
         <div class="spinner-border text-primary" role="status">
           <span class="visually-hidden">Updating...</span>
@@ -59,9 +59,40 @@
       </div>
       <h4 class="card-title">Updating Application</h4>
       <p class="card-text text-muted">{{ update_status or 'Processing update...' }}</p>
+      <div id="update-output" class="text-start" style="background: #f8f9fa; border: 1px solid #dee2e6; border-radius: 4px; padding: 12px; font-family: monospace; font-size: 0.75rem; max-height: 300px; overflow-y: auto; margin: 12px 0;">
+        <div class="text-muted small">Waiting for output...</div>
+      </div>
       <small class="text-muted d-block mt-3">Do not close or refresh the application.</small>
     </div>
   </div>
+  <script>
+    // Poll for update status/output every 500ms
+    const pollInterval = setInterval(async () => {
+      try {
+        const resp = await fetch('{{ url_for("update_status_api") }}');
+        const data = await resp.json();
+        
+        // Update status text
+        document.querySelector('.card-text').textContent = data.status || 'Processing update...';
+        
+        // Update output list
+        const outputDiv = document.getElementById('update-output');
+        if (data.output && data.output.length > 0) {
+          outputDiv.innerHTML = data.output.map(line => 
+            `<div>${line.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</div>`
+          ).join('');
+          outputDiv.scrollTop = outputDiv.scrollHeight;
+        }
+        
+        // Stop polling if update is done
+        if (!data.updating) {
+          clearInterval(pollInterval);
+        }
+      } catch (e) {
+        console.error('Poll error:', e);
+      }
+    }, 500);
+  </script>
   {% endif %}
   
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
