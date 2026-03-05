@@ -70,35 +70,51 @@ def create_app():
             return latest != current
 
     def check_for_updates(cfg: dict, force: bool = False) -> dict:
+        """Return a dict describing the latest GitHub version.
+
+        The timestamp of the last check is stored inside ``update_info`` under
+        ``last_check``; this keeps all update-related data together.  If an
+        old config still uses ``last_update_check`` at the top level we migrate
+        it on first call.
+        """
         now = datetime.now()
-        last = cfg.get("last_update_check")
-        should_fetch = True  # Default: always fetch unless we have a valid cache
-        if not force and last:  # Only apply cache if not forcing AND we have a check time
+
+        # migrate legacy timestamp if present
+        info = cfg.get("update_info") or {}
+        if "last_update_check" in cfg:
+            # preserve existing timestamp inside the nested dict
+            info.setdefault("last_check", cfg.pop("last_update_check"))
+            cfg["update_info"] = info
+            save_general(cfg)
+
+        last = info.get("last_check")
+        should_fetch = True
+        if not force and last:
             try:
                 last_dt = datetime.fromisoformat(last)
                 if (now - last_dt).total_seconds() < CHECK_INTERVAL_SECONDS:
-                    should_fetch = False  # Use cache if within interval
+                    should_fetch = False
             except Exception:
-                pass  # If error parsing date, keep should_fetch = True
-        
-        info = cfg.get("update_info") or {}
+                pass
+
         if should_fetch:
             try:
-                # Fetch version.yaml from raw GitHub (more reliable than releases API)
                 raw_url = f"https://raw.githubusercontent.com/{GITHUB_REPO}/main/config/version.yaml"
                 with urllib.request.urlopen(raw_url) as resp:
-                    remote_config = yaml.safe_load(resp)
-                
+                    data = resp.read()
+                if isinstance(data, bytes):
+                    data = data.decode("utf-8")
+                remote_config = yaml.safe_load(data)
+
                 if remote_config and remote_config.get("version"):
                     remote_version = remote_config.get("version")
                     info = {
                         "version": remote_version,
-                        "tag_name": f"v{remote_version}",  # Format as tag for consistency
+                        "tag_name": remote_version,
                         "repository": remote_config.get("repository", GITHUB_REPO),
-                        "body": ""  # Release notes
+                        "body": ""
                     }
-                    
-                    # Try to fetch release notes from the releases API (optional)
+                    # fetch notes (optional)
                     try:
                         releases_url = f"https://api.github.com/repos/{GITHUB_REPO}/releases/tag/v{remote_version}"
                         with urllib.request.urlopen(releases_url) as resp:
@@ -106,15 +122,18 @@ def create_app():
                             if release_data.get("body"):
                                 info["body"] = release_data.get("body")
                     except Exception:
-                        pass  # Release notes are optional
-                    
+                        pass
+
                     cfg["update_info"] = info
-                    cfg["last_update_check"] = now.isoformat()
-                    save_general(cfg)
+                # always record when we last tried
+                info["last_check"] = now.isoformat()
+                cfg["update_info"] = info
+                save_general(cfg)
             except Exception:
-                # If we can't fetch, use cached info
-                pass
-        
+                # even on failure update the timestamp so the user knows we tried
+                info["last_check"] = now.isoformat()
+                cfg["update_info"] = info
+
         return info
 
     @app.route("/settings", methods=["GET", "POST"])
@@ -181,8 +200,16 @@ def create_app():
         app.config["updating"] = True
         def updater():
             try:
-                subprocess.run(["git", "pull"], cwd=base, check=True)
-                subprocess.run([sys.executable, "-m", "pip", "install", "-r", "requirements.txt"], cwd=base, check=True)
+                # pull latest code and reinstall dependencies
+                res = subprocess.run(["git", "pull"], cwd=base, capture_output=True, text=True, check=True)
+                res2 = subprocess.run([sys.executable, "-m", "pip", "install", "-r", "requirements.txt"], cwd=base, capture_output=True, text=True, check=True)
+            except subprocess.CalledProcessError as e:
+                msg = f"Command '{e.cmd}' failed (exit {e.returncode})"
+                if e.stdout:
+                    msg += f"\nstdout: {e.stdout.strip()}"
+                if e.stderr:
+                    msg += f"\nstderr: {e.stderr.strip()}"
+                app.config["update_error"] = msg
             except Exception as e:
                 app.config["update_error"] = str(e)
             finally:

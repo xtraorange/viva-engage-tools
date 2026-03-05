@@ -1,4 +1,5 @@
 import pytest
+from datetime import datetime, timedelta
 from src.ui import create_app
 
 
@@ -46,6 +47,55 @@ def test_updates_page(client):
     rv = client.get('/updates')
     assert rv.status_code == 200
     assert b'Application Updates' in rv.data
+
+
+def test_force_bypasses_cache(monkeypatch, client, tmp_path):
+    """Clicking the check-again button should force a fresh lookup and store plain version"""
+    import yaml, os
+
+    general_path = os.path.join(os.getcwd(), "config", "general.yaml")
+    # set up old config state
+    old = datetime.now() - timedelta(days=1)
+    cfg = yaml.safe_load(open(general_path, "r")) or {}
+    # ensure we start with a nested info structure
+    cfg["update_info"] = {"tag_name": "1.0.0", "version": "1.0.0", "last_check": old.isoformat()}
+    # remove any legacy key if present
+    cfg.pop("last_update_check", None)
+    yaml.safe_dump(cfg, open(general_path, "w"))
+
+    # fake network responses so the update check returns a new version
+    called = {'count': 0}
+    def fake_urlopen(url):
+        called['count'] += 1
+        class Dummy:
+            def __enter__(self):
+                return self
+            def __exit__(self, exc_type, exc, tb):
+                pass
+            def read(self):
+                if 'raw.githubusercontent' in url:
+                    return b"version: '9.9.9'\nrepository: foo/bar\n"
+                else:
+                    return b'{"body": "notes"}'
+        return Dummy()
+
+    from src import ui
+    monkeypatch.setattr(ui.urllib.request, 'urlopen', fake_urlopen)
+
+    # perform a GET with force parameter
+    rv = client.get('/updates?force=true')
+    assert rv.status_code == 200
+
+    # ensure our fake network call was used
+    assert called['count'] > 0, "urlopen was never called"
+
+    # read config back and validate changes
+    cfg2 = yaml.safe_load(open(general_path, "r"))
+    # the nested timestamp should have changed
+    assert cfg2["update_info"]["last_check"] != old.isoformat()
+    assert cfg2["update_info"]["tag_name"] == '9.9.9'
+    # route itself should render the new version in body
+    assert b'v9.9.9' in rv.data
 
 
 def test_query_builder_routes(client):

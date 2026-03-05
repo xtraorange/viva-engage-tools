@@ -17,6 +17,9 @@
 
 {% if update_info %}
   <p>Latest release: <strong>v{{ update_info.tag_name }}</strong></p>
+  {% if update_info.last_check %}
+    <p>Last checked: <strong>{{ update_info.last_check }}</strong></p>
+  {% endif %}
   <details>
     <summary>Release notes</summary>
     <pre class="p-2" style="white-space: pre-wrap;">{{ update_info.body }}</pre>

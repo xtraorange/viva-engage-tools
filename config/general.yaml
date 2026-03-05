@@ -1,11 +1,11 @@
 email_method: outlook
-last_update_check: '2026-03-05T15:08:14.158395'
 max_workers: 4
 oracle_tns: OMSPRD
 outlook_auto_send: false
 output_dir: ./../Viva Engage Member Lists
 update_info:
-  body: ''
-  repository: xtraorange/jampy-engage
-  tag_name: v2.0.7
-  version: 2.0.7
+  body: notes
+  last_check: '2026-03-05T15:26:57.974850'
+  repository: foo/bar
+  tag_name: 9.9.9
+  version: 9.9.9
