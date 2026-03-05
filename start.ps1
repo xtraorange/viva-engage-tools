@@ -33,20 +33,24 @@ if (Test-Path $venvPath) {
     exit 1
 }
 
-Write-Host "Virtual environment activated successfully." -ForegroundColor Green
-Write-Host ""
 Write-Host "Starting Flask application..." -ForegroundColor Green
 Write-Host ""
-Write-Host "============================================" -ForegroundColor Cyan
-Write-Host "   Open your browser to: http://localhost:5000" -ForegroundColor Cyan
-Write-Host "============================================" -ForegroundColor Cyan
-Write-Host ""
 
-# Start the Flask application
-python -m src.ui
+# Start Python in a new window
+$pythonPath = (Get-Command python).Source
+Start-Process -FilePath $pythonPath -ArgumentList "-m", "src.ui" -WorkingDirectory $scriptDir
 
-# Show that the app has closed
+# Wait for server to start
+Write-Host "Waiting for server to start..." -ForegroundColor Cyan
+Start-Sleep -Seconds 2
+
+# Open browser
+Write-Host "Opening browser to http://localhost:5000..." -ForegroundColor Cyan
+Start-Process "http://localhost:5000"
+
 Write-Host ""
-Write-Host "Application has closed." -ForegroundColor Yellow
+Write-Host "Application started!" -ForegroundColor Green
+Write-Host "The Flask server is running in a separate window." -ForegroundColor Cyan
+Write-Host "Close this window or the server window to stop the application." -ForegroundColor Cyan
 Write-Host ""
-Read-Host "Press Enter to exit"
+Read-Host "Press Enter to exit this launcher"

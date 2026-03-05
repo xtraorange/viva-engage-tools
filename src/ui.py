@@ -12,6 +12,8 @@ import json
 import urllib.request
 import subprocess
 import sys
+import webbrowser
+import time
 
 from .generate_reports import discover_groups, process_group, _send_override_email
 from .config import load_general_config
@@ -70,14 +72,14 @@ def create_app():
     def check_for_updates(cfg: dict, force: bool = False) -> dict:
         now = datetime.now()
         last = cfg.get("last_update_check")
-        should_fetch = force  # if force is True, always fetch
-        if not force and last:  # only apply cache logic if not forcing
+        should_fetch = True  # Default: always fetch unless we have a valid cache
+        if not force and last:  # Only apply cache if not forcing AND we have a check time
             try:
                 last_dt = datetime.fromisoformat(last)
                 if (now - last_dt).total_seconds() < CHECK_INTERVAL_SECONDS:
-                    should_fetch = False
+                    should_fetch = False  # Use cache if within interval
             except Exception:
-                should_fetch = True
+                pass  # If error parsing date, keep should_fetch = True
         info = cfg.get("update_info") or {}
         if should_fetch:
             try:
@@ -689,4 +691,13 @@ if __name__ == "__main__":
     print(f"Starting Jampy Engage v{__version__}...")
     print("Navigate to http://localhost:5000 in your browser")
     print("Press Ctrl+C to stop the server")
+    
+    # Open browser after a brief delay to let the server start
+    def open_browser():
+        time.sleep(1.5)
+        webbrowser.open("http://localhost:5000")
+    
+    browser_thread = threading.Thread(target=open_browser, daemon=True)
+    browser_thread.start()
+    
     app.run(host="0.0.0.0", port=5000, debug=False)

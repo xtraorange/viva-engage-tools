@@ -29,16 +29,20 @@ echo Virtual environment activated successfully.
 echo.
 echo Starting Flask application...
 echo.
-echo ============================================
-echo   Open your browser to: http://localhost:5000
-echo ============================================
-echo.
+REM Start the Flask application in a new window
+echo Starting Flask application...
+start "Jampy Engage Server" cmd /k "python -m src.ui"
 
-REM Start the Flask application
-python -m src.ui
+REM Wait a moment for the server to start
+timeout /t 2 /nobreak
 
-REM Keep the window open if there's an error or after the app closes
+REM Open the browser
 echo.
-echo Application has closed.
+echo Opening browser to http://localhost:5000...
+start http://localhost:5000
+
+REM Give feedback
+echo.
+echo Application started! Check the "Jampy Engage Server" window for server logs.
 echo.
 pause
