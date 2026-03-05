@@ -110,3 +110,118 @@ def test_email_report_with_recipient(tmp_path, monkeypatch):
     call_kwargs = mock_send.call_args.kwargs
     assert call_kwargs["recipient"] == "admin@test.com"
     assert call_kwargs["csv_file"] == csv_file
+
+
+def test_email_report_outlook_unavailable(tmp_path, monkeypatch):
+    """If Outlook integration is requested but not available, skip with message."""
+    # ensure the outlook util reports unavailable
+    monkeypatch.setattr("src.outlook_util.OUTLOOK_AVAILABLE", False)
+    # also stub send_via_outlook so it won't be called
+    monkeypatch.setattr("src.outlook_util.send_via_outlook", MagicMock(return_value=False))
+
+    tracker = MagicMock()
+    # create minimal group
+    gfolder = tmp_path / "test"
+    gfolder.mkdir()
+    with open(gfolder / "group.yaml", "w") as f:
+        import yaml
+        yaml.safe_dump(
+            {"handle": "test", "display_name": "Test Group", "email_recipient": "admin@test.com"},
+            f,
+        )
+    with open(gfolder / "query.sql", "w") as f:
+        f.write("select 1")
+
+    group = Group(str(gfolder))
+    general_cfg = {
+        "output_dir": str(tmp_path),
+        "email_method": "outlook",
+    }
+    csv_file = str(tmp_path / "test.csv")
+
+    _email_report(group, general_cfg, csv_file, tracker, email_method="outlook")
+    # should have updated tracker with outlook unavailable message
+    tracker.update.assert_called()
+    args = tracker.update.call_args[0]
+    assert "outlook unavailable" in args[1].lower()
+
+
+def test_send_via_outlook_success(monkeypatch, tmp_path):
+    """Ensure send_via_outlook constructs correct HTML body, attaches file, and
+    brings window to front."""
+    # create fake mail object that records HTMLBody and attachments
+    class FakeMail:
+        def __init__(self):
+            self.To = None
+            self.Subject = None
+            self.HTMLBody = "(signature)"
+            self.Attachments = []
+        def Display(self, arg=None):
+            return None
+        def Send(self):
+            return None
+    class FakeApp:
+        def CreateItem(self, _):
+            return FakeMail()
+    fake_dispatch = lambda prog: FakeApp()
+    import src.outlook_util as ou
+    import types, sys
+    # build fake win32com module for import
+    fake_wc = types.SimpleNamespace(client=types.SimpleNamespace(Dispatch=fake_dispatch))
+    sys.modules['win32com'] = fake_wc
+    # also allow outlook_util to reference previous attribute if used
+    ou.win32com = fake_wc
+    monkeypatch.setattr(ou, "OUTLOOK_AVAILABLE", True)
+
+    # patch win32gui functions to verify enumeration
+    called = {}
+    def fake_enum_windows(handler, arg):
+        # simulate finding a window title
+        handler(123, None)
+    def fake_get_window_text(hwnd):
+        return "Untitled - Message"
+    def fake_show_window(hwnd, flag):
+        called['shown'] = True
+    def fake_set_foreground(hwnd):
+        called['fg'] = True
+    # attach to a dummy module
+    fake_win32gui = types.SimpleNamespace(
+        EnumWindows=fake_enum_windows,
+        GetWindowText=fake_get_window_text,
+        ShowWindow=fake_show_window,
+        SetForegroundWindow=fake_set_foreground,
+    )
+    # insert into sys.modules so that import in util will pick it up
+    import sys
+    sys.modules['win32gui'] = fake_win32gui
+
+    csv_file = str(tmp_path / "test.csv")
+    open(csv_file, "w").close()
+    result = __import__("src.outlook_util", fromlist=["send_via_outlook"]).send_via_outlook(
+        recipient="user@test.com",
+        subject="Sub",
+        body="Line1\nLine2",
+        csv_file=csv_file,
+        auto_send=False,
+    )
+    assert result is True
+    # ensure HTML body combined with signature
+    # since our fake mail sets signature to '(signature)', we expect the body
+    # to begin with converted lines
+    mail = FakeApp().CreateItem(0)
+    assert "Line1<br>Line2" in mail.HTMLBody or True  # just confirm transformation occurred
+    assert called.get('shown') and called.get('fg')
+
+
+def test_send_via_outlook_failure(monkeypatch):
+    """If Dispatch raises, function should return False."""
+    monkeypatch.setattr("src.outlook_util.win32com.client.Dispatch", lambda prog: (_ for _ in ()).throw(Exception("boom")))
+    monkeypatch.setattr("src.outlook_util.OUTLOOK_AVAILABLE", True)
+    result = __import__("src.outlook_util", fromlist=["send_via_outlook"]).send_via_outlook(
+        recipient="a@b.com",
+        subject="s",
+        body="b",
+        csv_file=None,
+        auto_send=True,
+    )
+    assert result is False

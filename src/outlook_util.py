@@ -32,15 +32,29 @@ def send_via_outlook(
         return False
 
     try:
-        outlook = win32com.client.Dispatch("Outlook.Application")
-        mail = outlook.CreateItem(0)  # 0 = olMailItem
+        # align with user-supplied working pattern
+        from win32com import client as win32_client
+        import win32gui, time, os
+
+        outlook = win32_client.Dispatch('outlook.application')
+        mail = outlook.CreateItem(0)
         mail.To = recipient
         mail.Subject = subject
-        mail.Body = body
 
+        # Display the email to let Outlook insert the default signature
+        mail.Display()
+        time.sleep(1)
+        signature = mail.HTMLBody if hasattr(mail, 'HTMLBody') else ''
+
+        # convert body text to HTML
+        body_html = body.replace('\n', '<br>')
+        mail.HTMLBody = body_html + signature
+
+        # attach csv file if provided
         if csv_file:
             try:
-                mail.Attachments.Add(csv_file)
+                absolute_path = os.path.abspath(csv_file)
+                mail.Attachments.Add(absolute_path)
             except Exception as e:
                 print(f"Warning: could not attach {csv_file}: {e}")
 
@@ -48,10 +62,14 @@ def send_via_outlook(
             mail.Send()
             return True
         else:
-            # Display the email for user review/editing
-            mail.Display()
+            # bring window to front
+            def window_enum(hwnd, results):
+                title = win32gui.GetWindowText(hwnd).lower()
+                if 'untitled - message' in title:
+                    win32gui.ShowWindow(hwnd, 5)
+                    win32gui.SetForegroundWindow(hwnd)
+            win32gui.EnumWindows(window_enum, None)
             return True
-
     except Exception as e:
         print(f"Error sending email via Outlook to {recipient}: {e}")
         return False

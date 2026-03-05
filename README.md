@@ -11,7 +11,7 @@ and optional output location.
 - Concurrent execution of SQL queries
 - Clean CLI with interactive prompts
 - CSV output with filenames like `handle (Display Name) - YY-MM-DD.csv`
-- Optional email delivery of generated CSVs
+- Optional email delivery of generated CSVs (SMTP or Outlook)
 - Extensible via tags and future features
 
 ## Getting Started
@@ -44,6 +44,19 @@ and optional output location.
    python run_reports.py 1 --email
    ```
 
+The progress display is updated continually so you can watch each
+report's state in real time.  You'll see lines such as:
+
+```
+community_a: generating member list (1/5)
+community_b: querying database
+community_c: writing CSV
+Completed 2/5 (40% )
+```
+
+and later steps like "preparing email" or "sending email" will
+appear as tasks advance.
+
 ### Database Configuration
 
 This tool uses the [jampy-db](https://github.com/xtraorange/jampy-db) library for
@@ -54,7 +67,18 @@ and will be forwarded to the `oracle_thick_external` profile.  See the
 
 ### Email Configuration (Optional)
 
-To enable email delivery of generated CSVs:
+The generator supports both **SMTP** and **Outlook** delivery.  Outlook
+integration requires a Windows environment and the `pywin32` package.
+Install dependencies before using it:
+
+```bash
+pip install -r requirements.txt   # includes pywin32
+```
+
+and ensure `email_method` in `config/general.yaml` is set to `"outlook"`
+(or leave as `"smtp"` to continue using SMTP).
+
+To enable SMTP delivery (works cross‑platform):
 
 1. Configure SMTP settings in `config/general.yaml`:
    ```yaml

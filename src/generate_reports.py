@@ -139,7 +139,7 @@ def main():
     csv_files = []  # collect CSV paths when using override_email
 
     with ThreadPoolExecutor(max_workers=max_workers) as pool:
-        for g in selected:
+        for idx, g in enumerate(selected, start=1):
             tracker.update(g.handle, "queued")
             future = pool.submit(
                 process_group,
@@ -149,6 +149,8 @@ def main():
                 tracker,
                 should_email=should_email,
                 override_email=override_email,
+                job_num=idx,
+                job_total=len(selected),
             )
             futures.append((future, g.handle if override_email else None))
         for fut, handle_info in futures:
@@ -188,18 +190,24 @@ def process_group(
     tracker: ProgressTracker,
     should_email: bool = False,
     override_email: str = None,
+    job_num: int = 0,
+    job_total: int = 0,
 ) -> str:
     """Process a single group: query, export CSV, and optionally email.
     
+    Args:
+        job_num: 1-based index of this job within the selected groups.
+        job_total: total number of groups being processed.
+
     Returns:
         Path to the generated CSV file, or None if an error occurred.
     """
     handle = group.handle
-    tracker.update(handle, "starting")
+    tracker.update(handle, f"generating member list ({job_num}/{job_total})")
     query = group.read_query()
     fullpath = None
     try:
-        tracker.update(handle, "querying")
+        tracker.update(handle, "querying database")
         rows = executor.run_query(query)
         tracker.update(handle, f"fetched {len(rows)} rows")
         # append domain to USERNAME column if present, then collapse to single
@@ -231,12 +239,14 @@ def process_group(
         fname = f"{handle} ({group.display_name}) - {date_str}.csv"
         fullpath = os.path.join(folder, fname)
         # assume first row column names not available; no headers for simplicity
+        tracker.update(handle, "writing CSV")
         executor.write_csv(rows, None, fullpath)
         tracker.update(handle, f"written {fullpath}")
         
         # send email if requested AND not using override email
         # (override emails are sent in bulk after all groups are processed)
         if should_email and not override_email:
+            tracker.update(handle, "preparing email")
             email_method = general_cfg.get("email_method", "smtp")
             auto_send = general_cfg.get("outlook_auto_send", False)
             _email_report(
@@ -296,6 +306,10 @@ def _send_override_email(
     
     # route to appropriate email method
     if email_method == "outlook":
+        from .outlook_util import OUTLOOK_AVAILABLE
+        if not OUTLOOK_AVAILABLE:
+            print("Outlook integration not available; install pywin32 or use smtp.")
+            return False
         # For Outlook, attach all CSV files
         auto_send = general_cfg.get("outlook_auto_send", False)
         # Note: send_via_outlook currently handles one attachment;
@@ -372,6 +386,12 @@ def _email_report(
 
     # route to appropriate email method
     if email_method == "outlook":
+        from .outlook_util import OUTLOOK_AVAILABLE
+        if not OUTLOOK_AVAILABLE:
+            # give user guidance
+            print("Outlook integration not available; install pywin32 or use smtp.")
+            tracker.update(group.handle, "outlook unavailable - email not sent")
+            return
         success = send_via_outlook(
             recipient=recipient,
             subject=subject,

@@ -6,7 +6,7 @@ oracle_tns: "OMSPRD"
 
 # Default output directory for generated CSVs.  Each group will get its own
 # subfolder under this path unless overridden in the group config.
-output_dir: "./output"
+output_dir: "./../Viva Engage Member Lists"
 
 # Optional parallelism: maximum number of concurrent queries.  If omitted,
 # the script will choose a sensible default based on CPU count.

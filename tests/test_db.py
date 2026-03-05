@@ -57,4 +57,5 @@ def test_username_domain(tmp_path, monkeypatch):
     from src.group import Group
     group = Group(str(gfolder))
     execu = DummyExec()
-    process_group(group, cfg, execu, tracker, should_email=False)
+    # provide dummy job numbering but they are unused in this unit test
+    process_group(group, cfg, execu, tracker, should_email=False, job_num=1, job_total=1)
