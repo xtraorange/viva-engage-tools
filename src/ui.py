@@ -67,11 +67,11 @@ def create_app():
         except Exception:
             return latest != current
 
-    def check_for_updates(cfg: dict) -> dict:
+    def check_for_updates(cfg: dict, force: bool = False) -> dict:
         now = datetime.now()
         last = cfg.get("last_update_check")
-        should_fetch = True
-        if last:
+        should_fetch = force  # if force is True, always fetch
+        if not force and last:  # only apply cache logic if not forcing
             try:
                 last_dt = datetime.fromisoformat(last)
                 if (now - last_dt).total_seconds() < CHECK_INTERVAL_SECONDS:
@@ -134,7 +134,8 @@ def create_app():
     @app.route("/updates", methods=["GET", "POST"])
     def updates():
         cfg = load_general()
-        update_info = check_for_updates(cfg)
+        force_check = request.args.get("force") == "true"
+        update_info = check_for_updates(cfg, force=force_check)
         update_available = False
         if update_info and update_info.get("tag_name"):
             update_available = _is_newer(update_info.get("tag_name"), __version__)
