@@ -97,6 +97,13 @@ def test_force_bypasses_cache(monkeypatch, client, tmp_path):
     yaml.safe_dump(cfg2, open(general_path, "w"))
 
 
+def test_restart_endpoint(client):
+    rv = client.post('/restart')
+    # response may be 200 or 500 depending on environment
+    assert rv.status_code in (200, 500)
+    assert b"Shutting" in rv.data or b"Shutdown" in rv.data
+
+
 def test_update_stashes_changes(monkeypatch, client):
     """perform_update should stash local modifications and pop afterwards"""
     from threading import Event

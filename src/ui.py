@@ -264,6 +264,15 @@ def create_app():
             "error": app.config.get("update_error", "")
         })
 
+    @app.route("/restart", methods=["POST"])
+    def restart():
+        """Shutdown the Flask development server."""
+        func = request.environ.get('werkzeug.server.shutdown')
+        if func is None:
+            return "Shutdown not available", 500
+        threading.Thread(target=func).start()
+        return "Shutting down", 200
+
     @app.route("/groups")
     def groups():
         if app.config.get("updating"):

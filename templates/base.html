@@ -59,8 +59,11 @@
       </div>
       <h4 class="card-title">Updating Application</h4>
       <p class="card-text text-muted">{{ update_status or 'Processing update...' }}</p>
-      <div id="update-output" class="text-start" style="background: #f8f9fa; border: 1px solid #dee2e6; border-radius: 4px; padding: 12px; font-family: monospace; font-size: 0.75rem; max-height: 300px; overflow-y: auto; margin: 12px 0;">
+      <div id="update-output" class="text-start" style="background: #f8f9fa; border: 1px solid #dee2e6; border-radius: 4px; padding: 12px; font-family: monospace; font-size: 0.75rem; height: 60vh; overflow-y: auto; margin: 12px 0; width: 90vw;">
         <div class="text-muted small">Waiting for output...</div>
+      </div>
+      <div class="mt-3">
+        <button id="restart-btn" class="btn btn-success" style="display:none;">Restart application</button>
       </div>
       <small class="text-muted d-block mt-3">Do not close or refresh the application.</small>
     </div>
@@ -88,10 +91,20 @@
         if (!data.updating) {
           clearInterval(pollInterval);
         }
+        // show restart button when complete status present
+        if (!data.updating && data.status && data.status.toLowerCase().includes('restart')) {
+          document.getElementById('restart-btn').style.display = 'inline-block';
+        }
       } catch (e) {
         console.error('Poll error:', e);
       }
     }, 500);
+
+    document.getElementById('restart-btn').addEventListener('click', async () => {
+      await fetch('{{ url_for("restart") }}', { method: 'POST' });
+      document.getElementById('restart-btn').disabled = true;
+      document.querySelector('.card-text').textContent = 'Shutting down...';
+    });
   </script>
   {% endif %}
   
