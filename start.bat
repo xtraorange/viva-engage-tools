@@ -36,7 +36,6 @@ if exist restart.flag (
     echo   http://localhost:5000
     echo ============================================
     echo.
-    echo Restarting server...
     goto loop
 )
 
