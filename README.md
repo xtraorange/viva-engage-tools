@@ -8,12 +8,12 @@
 
 **Windows (PowerShell):**
 ```powershell
-irm https://raw.githubusercontent.com/[USERNAME]/jampy-engage/main/install.ps1 | iex
+irm https://raw.githubusercontent.com/xtraorange/jampy-engage/main/install.ps1 | iex
 ```
 
 **macOS/Linux (bash):**
 ```bash
-curl -fsSL https://raw.githubusercontent.com/[USERNAME]/jampy-engage/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/xtraorange/jampy-engage/main/install.sh | bash
 ```
 
 **Manual Installation:**
@@ -21,7 +21,7 @@ curl -fsSL https://raw.githubusercontent.com/[USERNAME]/jampy-engage/main/instal
 2. Install [Git](https://git-scm.com/)
 3. Clone the repository:
    ```bash
-   git clone https://github.com/[USERNAME]/jampy-engage.git
+   git clone https://github.com/xtraorange/jampy-engage.git
    cd jampy-engage
    ```
 4. Create a virtual environment:
@@ -207,7 +207,7 @@ Ensure you're in the correct working directory where `groups/` folder exists.
 
 ## 🤝 Support
 
-For issues or feature requests, please visit the [GitHub repository](https://github.com/[USERNAME]/jampy-engage).
+For issues or feature requests, please visit the [GitHub repository](https://github.com/xtraorange/jampy-engage).
 
 ## 📝 Features
 
