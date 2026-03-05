@@ -1,6 +1,6 @@
 # jampy-engage Installer for Windows
 # One-line install (copy and paste into PowerShell):
-# irm https://raw.githubusercontent.com/[USERNAME]/jampy-engage/main/install.ps1 | iex
+# irm https://raw.githubusercontent.com/xtraorange/jampy-engage/main/install.ps1 | iex
 
 param(
     [string]$TargetDir = "$env:USERPROFILE\jampy-engage"
@@ -34,7 +34,7 @@ if (Test-Path $TargetDir) {
     git pull
 } else {
     Write-Host "Cloning repository..." -ForegroundColor Yellow
-    git clone https://github.com/[USERNAME]/jampy-engage.git $TargetDir
+    git clone https://github.com/xtraorange/jampy-engage.git $TargetDir
     Set-Location $TargetDir
 }
 
