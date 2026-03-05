@@ -80,18 +80,41 @@ def create_app():
                     should_fetch = False  # Use cache if within interval
             except Exception:
                 pass  # If error parsing date, keep should_fetch = True
+        
         info = cfg.get("update_info") or {}
         if should_fetch:
             try:
-                url = f"https://api.github.com/repos/{GITHUB_REPO}/releases/latest"
-                with urllib.request.urlopen(url) as resp:
-                    data = json.load(resp)
-                info = data
-                cfg["update_info"] = info
-                cfg["last_update_check"] = now.isoformat()
-                save_general(cfg)
+                # Fetch version.yaml from raw GitHub (more reliable than releases API)
+                raw_url = f"https://raw.githubusercontent.com/{GITHUB_REPO}/main/config/version.yaml"
+                with urllib.request.urlopen(raw_url) as resp:
+                    remote_config = yaml.safe_load(resp)
+                
+                if remote_config and remote_config.get("version"):
+                    remote_version = remote_config.get("version")
+                    info = {
+                        "version": remote_version,
+                        "tag_name": f"v{remote_version}",  # Format as tag for consistency
+                        "repository": remote_config.get("repository", GITHUB_REPO),
+                        "body": ""  # Release notes
+                    }
+                    
+                    # Try to fetch release notes from the releases API (optional)
+                    try:
+                        releases_url = f"https://api.github.com/repos/{GITHUB_REPO}/releases/tag/v{remote_version}"
+                        with urllib.request.urlopen(releases_url) as resp:
+                            release_data = json.load(resp)
+                            if release_data.get("body"):
+                                info["body"] = release_data.get("body")
+                    except Exception:
+                        pass  # Release notes are optional
+                    
+                    cfg["update_info"] = info
+                    cfg["last_update_check"] = now.isoformat()
+                    save_general(cfg)
             except Exception:
+                # If we can't fetch, use cached info
                 pass
+        
         return info
 
     @app.route("/settings", methods=["GET", "POST"])

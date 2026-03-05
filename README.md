@@ -125,15 +125,15 @@ Navigate to **Generate** to:
 - **Restore** - Click "Restore" to upload a previously saved backup
 
 ##  Application Updates
-The web UI includes an automatic update checker:
-- **Automatic checking**: Checks GitHub for new releases once per day
+The web UI includes an automatic update checker that reads the version directly from GitHub:
+- **Automatic checking**: Checks GitHub for version updates once per day
 - **Manual checking**: Click "Updates" in the top navigation, then "Check again" to force a fresh check
 - **Updates page**: Shows your current version, latest release, and release notes
 - **One-click updates**: Click "Update now" to automatically pull latest code and reinstall dependencies
 
 The application enters "updating" mode while installing - most pages become disabled. After the update completes, restart the server to load the new code.
 
-**Note:** Your GitHub release must be marked as "Latest release" for the update checker to detect it. If you see an older version than expected, check that the newest release is marked as "Latest" in your GitHub releases page.
+**How it works:** The update checker reads `config/version.yaml` directly from the GitHub repository, so any version change is detected immediately - no need to concern yourself with release markings or API caching issues.
 
 ## 🔧 Command-Line Interface (for automation)
 
@@ -240,14 +240,12 @@ repository: "xtraorange/jampy-engage"
 repository_url: "https://github.com/xtraorange/jampy-engage"
 ```
 
-**To update the version** when releasing a new version:
+**To release a new version:**
 1. Update the `version` field in `config/version.yaml`
-2. Commit and push to GitHub with a version tag (e.g., `v0.2.0`)
-3. Users will see the update available in the **Updates** page
+2. Commit and push to GitHub (on any branch, typically `main`)
+3. Users will automatically see the update available the next time they check (or click "Check again" on the Updates page)
+4. Optional: Create a GitHub release tag and add release notes for additional visibility
 
-**To check for updates** from the web UI:
-1. Navigate to the **Updates** page
-2. Click "Check again" to refresh the release information
-3. If a new version is available, click "Update now" to automatically pull the latest changes
+The update checker reads this file directly from GitHub, so changes are detected immediately without any caching delays or release marking requirements.
 
 ```
