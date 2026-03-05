@@ -68,13 +68,13 @@ def generate_hierarchy_sql(
   SELECT ID, FIRST_NAME, LAST_NAME, USERNAME, EMPLOYEE_ID, SUPERVISORID, SUPERVISOR_NAME,
          DEPARTMENT, JOB_TITLE, JOB_CODE, BU_CODE, COMPANY, TREE_BRANCH, FULL_PART_TIME,
          HIRE_DT, LAST_HIRE_DT, Terminated
-  FROM Employee e
+  FROM omsadm.employee_mv e
   WHERE {root_where}
   UNION ALL
   SELECT e.ID, e.FIRST_NAME, e.LAST_NAME, e.USERNAME, e.EMPLOYEE_ID, e.SUPERVISORID, e.SUPERVISOR_NAME,
          e.DEPARTMENT, e.JOB_TITLE, e.JOB_CODE, e.BU_CODE, e.COMPANY, e.TREE_BRANCH, e.FULL_PART_TIME,
          e.HIRE_DT, e.LAST_HIRE_DT, e.Terminated
-  FROM Employee e
+  FROM omsadm.employee_mv e
   INNER JOIN cte ON cte.ID = e.SUPERVISORID
   WHERE Terminated IS NULL{f" AND e.ID <> '{person_id}'" if mode == 'by_person' and person_id else ''}
 )"""

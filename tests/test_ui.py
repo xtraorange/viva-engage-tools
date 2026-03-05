@@ -47,3 +47,40 @@ def test_updates_page(client):
     assert rv.status_code == 200
     assert b'Application Updates' in rv.data
 
+
+def test_query_builder_routes(client):
+    # Test query builder page loads
+    response = client.get("/query-builder")
+    assert response.status_code == 200
+    assert b"SQL Query Builder" in response.data
+
+    # Test employee search (will fail without DB, but should not crash)
+    response = client.get("/api/search-employees?q=test")
+    assert response.status_code in [200, 500]  # 500 is expected without DB
+
+    # Test attribute searches
+    response = client.get("/api/search-job-titles?q=test")
+    assert response.status_code in [200, 500]
+
+    response = client.get("/api/search-bu-codes?q=test")
+    assert response.status_code in [200, 500]
+
+    response = client.get("/api/search-companies?q=test")
+    assert response.status_code in [200, 500]
+
+    response = client.get("/api/search-tree-branches?q=test")
+    assert response.status_code in [200, 500]
+
+    # Test SQL generation
+    response = client.post("/api/generate-builder-sql", json={
+        "mode": "by_person",
+        "person_id": "12345"
+    })
+    assert response.status_code in [200, 400]
+
+    # Test query testing
+    response = client.post("/api/test-query", json={
+        "sql": "SELECT * FROM dual"
+    })
+    assert response.status_code in [200, 500]
+

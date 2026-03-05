@@ -395,7 +395,7 @@ def create_app():
             
             # Search across ID, name, and username
             sql = f"""
-            SELECT ID, FIRST_NAME, LAST_NAME, USERNAME FROM Employee 
+            SELECT ID, FIRST_NAME, LAST_NAME, USERNAME FROM omsadm.employee_mv 
             WHERE (ID LIKE '%{query}%' OR FIRST_NAME LIKE '%{query}%' OR LAST_NAME LIKE '%{query}%' OR USERNAME LIKE '%{query}%')
             AND Terminated IS NULL 
             ORDER BY FIRST_NAME, LAST_NAME
@@ -422,7 +422,7 @@ def create_app():
         
         try:
             executor = DatabaseExecutor(cfg.get("oracle_tns"))
-            sql = f"SELECT DISTINCT JOB_TITLE FROM Employee WHERE JOB_TITLE LIKE '%{query}%' AND Terminated IS NULL ORDER BY JOB_TITLE"
+            sql = f"SELECT DISTINCT JOB_TITLE FROM omsadm.employee_mv WHERE JOB_TITLE LIKE '%{query}%' AND Terminated IS NULL ORDER BY JOB_TITLE"
             results = executor.execute_query(sql)
             items = [{"value": row[0]} for row in results[:20]]
             executor.close()
@@ -441,7 +441,7 @@ def create_app():
         
         try:
             executor = DatabaseExecutor(cfg.get("oracle_tns"))
-            sql = f"SELECT DISTINCT BU_CODE FROM Employee WHERE BU_CODE LIKE '%{query}%' AND Terminated IS NULL ORDER BY BU_CODE"
+            sql = f"SELECT DISTINCT BU_CODE FROM omsadm.employee_mv WHERE BU_CODE LIKE '%{query}%' AND Terminated IS NULL ORDER BY BU_CODE"
             results = executor.execute_query(sql)
             items = [{"value": row[0]} for row in results[:20]]
             executor.close()
@@ -460,7 +460,7 @@ def create_app():
         
         try:
             executor = DatabaseExecutor(cfg.get("oracle_tns"))
-            sql = f"SELECT DISTINCT COMPANY FROM Employee WHERE COMPANY LIKE '%{query}%' AND Terminated IS NULL ORDER BY COMPANY"
+            sql = f"SELECT DISTINCT COMPANY FROM omsadm.employee_mv WHERE COMPANY LIKE '%{query}%' AND Terminated IS NULL ORDER BY COMPANY"
             results = executor.execute_query(sql)
             items = [{"value": row[0]} for row in results[:20]]
             executor.close()
@@ -479,7 +479,7 @@ def create_app():
         
         try:
             executor = DatabaseExecutor(cfg.get("oracle_tns"))
-            sql = f"SELECT DISTINCT TREE_BRANCH FROM Employee WHERE TREE_BRANCH LIKE '%{query}%' AND Terminated IS NULL ORDER BY TREE_BRANCH"
+            sql = f"SELECT DISTINCT TREE_BRANCH FROM omsadm.employee_mv WHERE TREE_BRANCH LIKE '%{query}%' AND Terminated IS NULL ORDER BY TREE_BRANCH"
             results = executor.execute_query(sql)
             items = [{"value": row[0]} for row in results[:20]]
             executor.close()
