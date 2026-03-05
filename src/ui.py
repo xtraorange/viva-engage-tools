@@ -878,10 +878,6 @@ def create_app():
 
 if __name__ == "__main__":
     """Run the Flask application."""
-    import os
-    # Suppress Flask startup messages
-    os.environ['WERKZEUG_RUN_MAIN'] = 'true'
-    
     app = create_app()
     
     # Open browser after a brief delay to let the server start
@@ -892,4 +888,4 @@ if __name__ == "__main__":
     browser_thread = threading.Thread(target=open_browser, daemon=True)
     browser_thread.start()
     
-    app.run(host="0.0.0.0", port=5000, debug=False, use_reloader=False)
+    app.run(host="0.0.0.0", port=5000, debug=False)
