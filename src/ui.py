@@ -266,17 +266,21 @@ def create_app():
 
     @app.route("/restart", methods=["POST"])
     def restart():
-        """Shutdown the Flask development server or exit process.
+        """Signal the launcher to restart the server and then shut down this process.
 
-        The werkzeug shutdown function is only available in the development
-        server; if it's missing we fall back to os._exit after a brief delay so
-        the POST can return successfully to the browser.
+        We create a small flag file so the `start.bat` loop knows to relaunch.
         """
+        # set flag
+        try:
+            with open(os.path.join(base, "restart.flag"), "w") as f:
+                f.write("restart")
+        except Exception:
+            pass
+
         func = request.environ.get('werkzeug.server.shutdown')
         if func:
             threading.Thread(target=func).start()
         else:
-            # schedule hard exit so caller gets 200
             threading.Timer(0.5, lambda: os._exit(0)).start()
         return "Shutting down", 200
 

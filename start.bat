@@ -37,11 +37,16 @@ echo.
 echo Press Ctrl+C to stop the server.
 echo.
 
-REM Start the Flask application (this will also open the browser automatically)
+REM Start the Flask application inside a restart loop
+:loop
 python -m src.ui
 
-REM Keep the window open if there's an error or after the app closes
-echo.
-echo Application has stopped.
-echo.
-pause
+REM When the server exits, check for restart flag
+if exist restart.flag (
+    del restart.flag
+    echo Restart requested, launching again...
+    goto loop
+)
+
+REM No restart requested; exit script
+exit /b

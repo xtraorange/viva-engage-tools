@@ -1,4 +1,5 @@
 import pytest
+import os
 from datetime import datetime, timedelta
 from src.ui import create_app
 
@@ -97,11 +98,15 @@ def test_force_bypasses_cache(monkeypatch, client, tmp_path):
     yaml.safe_dump(cfg2, open(general_path, "w"))
 
 
-def test_restart_endpoint(client):
+def test_restart_endpoint(client, tmp_path):
     rv = client.post('/restart')
     # should always return 200
     assert rv.status_code == 200
     assert b"Shutting" in rv.data
+    # flag file should have been created
+    flag_path = os.path.join(os.getcwd(), "restart.flag")
+    assert os.path.exists(flag_path)
+    os.remove(flag_path)
 
 
 def test_update_stashes_changes(monkeypatch, client):
