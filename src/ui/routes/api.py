@@ -25,6 +25,11 @@ def init_api_routes(app, base_path: str):
             from ...db import DatabaseExecutor
             executor = DatabaseExecutor(cfg.get("oracle_tns"))
 
+            # First test basic connection
+            test_sql = "SELECT 1 FROM dual"
+            test_result = executor.run_query(test_sql)
+            print(f"DEBUG: Database connection test: {test_result}")  # Debug log
+
             # Search across ID, name, and username (case-insensitive)
             sql = f"""
             SELECT ID, FIRST_NAME, LAST_NAME, USERNAME FROM omsadm.employee_mv
