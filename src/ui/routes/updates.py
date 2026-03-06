@@ -245,13 +245,23 @@ def init_updates_routes(app, base_path: str):
 
     @updates_bp.route("/restart", methods=["POST"])
     def restart():
-        """Signal the launcher to restart the server."""
-        # set flag
+        """Signal the launcher to restart the server and shut down gracefully."""
+        # write restart flag for start scripts
         try:
             with open(os.path.join(base_path, "restart.flag"), "w") as f:
                 f.write("restart")
         except Exception:
             pass
+
+        # attempt to shutdown the Flask development server if available
+        func = request.environ.get('werkzeug.server.shutdown')
+        if func:
+            func()
+        else:
+            # fallback: force exit; launcher will restart because of flag
+            import os
+            os._exit(0)
+
         return redirect(url_for("main.index"))
 
     @updates_bp.route("/email-templates", methods=["GET", "POST"])

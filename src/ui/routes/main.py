@@ -132,12 +132,21 @@ def start_jobs(app, selected, should_email, override_email):
     cfg = config_service.load_general_config()
     report_service = ReportService(cfg)
 
+    # create tracker that will be visible to the UI
+    from ...db import ProgressTracker
+    tracker = ProgressTracker(len(selected))
+
     def task():
-        csv_files = report_service.process_groups(selected, should_email, override_email)
+        # pass the tracker so it gets updated during processing
+        report_service.process_groups(
+            selected,
+            should_email,
+            override_email,
+            tracker=tracker,
+        )
         # Processing complete - tracker will be cleaned up by the UI
 
     threading.Thread(target=task, daemon=True).start()
 
-    # Return a tracker for status monitoring
-    from ...db import ProgressTracker
-    return ProgressTracker(len(selected))
+    # Return the tracker for status monitoring
+    return tracker

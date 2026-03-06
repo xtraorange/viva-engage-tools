@@ -59,5 +59,5 @@ class ProgressTracker:
         lines = [f"{h}: {s}" for h, s in self.status.items()]
         pct = (self.done / self.total * 100) if self.total else 0
         lines.append(f"Completed {self.done}/{self.total} ({pct:.0f}% )")
-        os.system('cls' if os.name == 'nt' else 'clear')
+        # print progress without clearing screen so terminal output remains readable
         print("\n".join(lines))
