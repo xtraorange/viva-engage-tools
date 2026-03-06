@@ -115,7 +115,7 @@ def init_main_routes(app, base_path: str):
             return redirect(url_for("main.settings"))
 
         groups = group_service.discover_groups()
-        return render_template("index.html", config=cfg, groups=groups,
+        return render_template("settings.html", config=cfg, groups=groups,
                                updating=app.config.get("updating"),
                                update_error=app.config.get("update_error"))
 
