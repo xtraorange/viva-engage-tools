@@ -18,10 +18,7 @@ def init_main_routes(app, base_path: str):
 
     @main_bp.route("/")
     def index():
-        """Main dashboard."""
-        if app.config.get("updating"):
-            return "Update in progress, please wait and refresh after restart", 503
-
+        """Main dashboard - generate reports."""
         groups = group_service.discover_groups()
         cfg = config_service.load_general_config()
 
@@ -31,7 +28,7 @@ def init_main_routes(app, base_path: str):
             tags.update(g.tags)
         tags = sorted(tags)
 
-        return render_template("index.html", config=cfg, groups=groups, tags=tags,
+        return render_template("generate.html", config=cfg, groups=groups, tags=tags,
                                updating=app.config.get("updating"),
                                update_error=app.config.get("update_error"))
 
@@ -65,9 +62,6 @@ def init_main_routes(app, base_path: str):
     @main_bp.route("/status")
     def status():
         """Show processing status."""
-        if app.config.get("updating"):
-            return "Update in progress, please wait and refresh after restart", 503
-
         tracker = app.config.get("tracker")
         if not tracker:
             return redirect(url_for("main.index"))
