@@ -3,10 +3,10 @@ from flask import Blueprint, render_template, request, redirect, url_for, jsonif
 import os
 import threading
 
-from ..services.config_service import ConfigService
-from ..services.group_service import GroupService
-from ..services.report_service import ReportService
-from ..generate_reports import discover_groups
+from ...services.config_service import ConfigService
+from ...services.group_service import GroupService
+from ...services.report_service import ReportService
+from ...generate_reports import discover_groups
 
 main_bp = Blueprint('main', __name__)
 
@@ -130,8 +130,8 @@ def init_main_routes(app, base_path: str):
 
 def start_jobs(app, selected, should_email, override_email):
     """Start background job processing."""
-    from ..services.config_service import ConfigService
-    from ..services.report_service import ReportService
+    from ...services.config_service import ConfigService
+    from ...services.report_service import ReportService
 
     base = os.getcwd()
     config_service = ConfigService(base)
@@ -145,5 +145,5 @@ def start_jobs(app, selected, should_email, override_email):
     threading.Thread(target=task, daemon=True).start()
 
     # Return a tracker for status monitoring
-    from ..db import ProgressTracker
+    from ...db import ProgressTracker
     return ProgressTracker(len(selected))

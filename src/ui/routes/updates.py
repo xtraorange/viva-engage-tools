@@ -10,7 +10,7 @@ import threading
 import time
 from datetime import datetime, timedelta
 
-from ..services.config_service import ConfigService
+from ...services.config_service import ConfigService
 
 updates_bp = Blueprint('updates', __name__)
 
@@ -280,7 +280,7 @@ def init_updates_routes(app, base_path: str):
     @updates_bp.route("/backup")
     def backup():
         """Create a zip backup of all configuration and groups."""
-        from ..utils.file_utils import create_backup_zip, get_backup_filename
+        from ...utils.file_utils import create_backup_zip, get_backup_filename
         zip_buffer = create_backup_zip(base_path)
         return send_file(
             zip_buffer,

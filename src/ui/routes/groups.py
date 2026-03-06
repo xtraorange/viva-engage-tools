@@ -2,9 +2,9 @@
 from flask import Blueprint, render_template, request, redirect, url_for, jsonify
 import os
 
-from ..services.group_service import GroupService
-from ..utils.validation import validate_group_handle
-from ..utils.file_utils import safe_delete_directory
+from ...services.group_service import GroupService
+from ...utils.validation import validate_group_handle
+from ...utils.file_utils import safe_delete_directory
 
 groups_bp = Blueprint('groups', __name__)
 

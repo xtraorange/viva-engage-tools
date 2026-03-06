@@ -2,8 +2,8 @@
 from flask import Blueprint, request, jsonify
 import os
 
-from ..services.config_service import ConfigService
-from ..sql_builder import generate_safe_hierarchy_sql
+from ...services.config_service import ConfigService
+from ...sql_builder import generate_safe_hierarchy_sql
 
 api_bp = Blueprint('api', __name__)
 
@@ -22,7 +22,7 @@ def init_api_routes(app, base_path: str):
             return jsonify([])
 
         try:
-            from ..db import DatabaseExecutor
+            from ...db import DatabaseExecutor
             executor = DatabaseExecutor(cfg.get("oracle_tns"))
 
             # Search across ID, name, and username
@@ -53,7 +53,7 @@ def init_api_routes(app, base_path: str):
             return jsonify([])
 
         try:
-            from ..db import DatabaseExecutor
+            from ...db import DatabaseExecutor
             executor = DatabaseExecutor(cfg.get("oracle_tns"))
             sql = f"SELECT DISTINCT JOB_TITLE FROM omsadm.employee_mv WHERE JOB_TITLE LIKE '%{query}%' AND Terminated IS NULL ORDER BY JOB_TITLE"
             results = executor.run_query(sql)
@@ -73,7 +73,7 @@ def init_api_routes(app, base_path: str):
             return jsonify([])
 
         try:
-            from ..db import DatabaseExecutor
+            from ...db import DatabaseExecutor
             executor = DatabaseExecutor(cfg.get("oracle_tns"))
             sql = f"SELECT DISTINCT BU_CODE FROM omsadm.employee_mv WHERE BU_CODE LIKE '%{query}%' AND Terminated IS NULL ORDER BY BU_CODE"
             results = executor.run_query(sql)
@@ -93,7 +93,7 @@ def init_api_routes(app, base_path: str):
             return jsonify([])
 
         try:
-            from ..db import DatabaseExecutor
+            from ...db import DatabaseExecutor
             executor = DatabaseExecutor(cfg.get("oracle_tns"))
             sql = f"SELECT DISTINCT COMPANY FROM omsadm.employee_mv WHERE COMPANY LIKE '%{query}%' AND Terminated IS NULL ORDER BY COMPANY"
             results = executor.run_query(sql)
@@ -113,7 +113,7 @@ def init_api_routes(app, base_path: str):
             return jsonify([])
 
         try:
-            from ..db import DatabaseExecutor
+            from ...db import DatabaseExecutor
             executor = DatabaseExecutor(cfg.get("oracle_tns"))
             sql = f"SELECT DISTINCT TREE_BRANCH FROM omsadm.employee_mv WHERE TREE_BRANCH LIKE '%{query}%' AND Terminated IS NULL ORDER BY TREE_BRANCH"
             results = executor.run_query(sql)

@@ -1,8 +1,8 @@
 """Tag management routes."""
 from flask import Blueprint, render_template, request, redirect, url_for
 
-from ..services.group_service import GroupService
-from ..utils.validation import validate_tag_name
+from ...services.group_service import GroupService
+from ...utils.validation import validate_tag_name
 
 tags_bp = Blueprint('tags', __name__)
 
