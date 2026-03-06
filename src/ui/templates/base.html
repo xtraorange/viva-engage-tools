@@ -72,7 +72,7 @@
     // Poll for update status/output every 500ms
     const pollInterval = setInterval(async () => {
       try {
-        const resp = await fetch('{{ url_for("update_status_api") }}');
+        const resp = await fetch('{{ url_for("updates.update_status_api") }}');
         const data = await resp.json();
         
         // Update status text
@@ -103,11 +103,11 @@
     }, 500);
 
     document.getElementById('restart-btn').addEventListener('click', async () => {
-      await fetch('{{ url_for("restart") }}', { method: 'POST' });
+      await fetch('{{ url_for("updates.restart") }}', { method: 'POST' });
       document.getElementById('restart-btn').disabled = true;
       document.querySelector('.card-text').textContent = 'Shutting down...';
       // after server stops, poll until it comes back then reload
-      const checkUrl = '{{ url_for("index") }}';
+      const checkUrl = '{{ url_for("main.index") }}';
       let down = false;
       const checkInterval = setInterval(async () => {
         try {
