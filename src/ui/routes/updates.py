@@ -247,11 +247,8 @@ def init_updates_routes(app, base_path: str):
     def restart():
         """Signal the launcher to restart the server and shut down gracefully."""
         # write restart flag for start scripts
-        try:
-            with open(os.path.join(base_path, "restart.flag"), "w") as f:
-                f.write("restart")
-        except Exception:
-            pass
+        with open("restart.flag", "w") as f:
+            f.write("restart")
 
         # attempt to shutdown the Flask development server if available
         func = request.environ.get('werkzeug.server.shutdown')

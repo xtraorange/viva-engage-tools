@@ -21,7 +21,8 @@ class ReportService:
         groups: List[Group],
         should_email: bool = False,
         override_email: Optional[str] = None,
-        progress_callback: Optional[callable] = None
+        progress_callback: Optional[callable] = None,
+        tracker: Optional[ProgressTracker] = None
     ) -> List[str]:
         """Process multiple groups and generate reports.
 
@@ -30,13 +31,15 @@ class ReportService:
             should_email: Whether to send individual emails
             override_email: Email address for bulk sending (overrides individual emails)
             progress_callback: Optional callback for progress updates
+            tracker: Optional ProgressTracker instance for UI integration
 
         Returns:
             List of generated CSV file paths
         """
         executor = DatabaseExecutor(self.config.get("oracle_tns"))
         max_workers = self.config.get("max_workers") or os.cpu_count() or 4
-        tracker = ProgressTracker(len(groups))
+        if tracker is None:
+            tracker = ProgressTracker(len(groups))
         csv_files = []
 
         try:
