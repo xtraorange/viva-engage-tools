@@ -27,8 +27,8 @@ def init_api_routes(app, base_path: str):
 
             # Search across ID, name, and username (case-insensitive)
             sql = f"""
-            SELECT ID, FIRST_NAME, LAST_NAME, USERNAME FROM omsadm.employee_mv
-            WHERE (UPPER(ID) LIKE UPPER('%{query}%') OR UPPER(FIRST_NAME) LIKE UPPER('%{query}%') OR UPPER(LAST_NAME) LIKE UPPER('%{query}%') OR UPPER(USERNAME) LIKE UPPER('%{query}%'))
+            SELECT EMPLOYEE_ID, FIRST_NAME, LAST_NAME, USERNAME FROM omsadm.employee_mv
+            WHERE (UPPER(EMPLOYEE_ID) LIKE UPPER('%{query}%') OR UPPER(FIRST_NAME) LIKE UPPER('%{query}%') OR UPPER(LAST_NAME) LIKE UPPER('%{query}%') OR UPPER(USERNAME) LIKE UPPER('%{query}%'))
             AND status_code != 'T'
             ORDER BY FIRST_NAME, LAST_NAME
             """

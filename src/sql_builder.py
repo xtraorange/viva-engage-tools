@@ -32,7 +32,7 @@ def generate_hierarchy_sql(
         where_parts = ["status_code != 'T'"]
         
         if person_id:
-            where_parts.append(f"AND ID = '{person_id}'")
+            where_parts.append(f"AND EMPLOYEE_ID = '{person_id}'")
         elif person_username:
             where_parts.append(f"AND USERNAME = '{person_username}'")
         elif person_first_name and person_last_name:
@@ -65,18 +65,18 @@ def generate_hierarchy_sql(
     
     # Build the hierarchy CTE
     hierarchy_cte = f"""WITH cte AS (
-  SELECT ID, FIRST_NAME, LAST_NAME, USERNAME, EMPLOYEE_ID, SUPERVISORID, SUPERVISOR_NAME,
+  SELECT EMPLOYEE_ID, FIRST_NAME, LAST_NAME, USERNAME, EMPLOYEE_ID, SUPERVISORID, SUPERVISOR_NAME,
          DEPARTMENT, JOB_TITLE, JOB_CODE, BU_CODE, COMPANY, TREE_BRANCH, FULL_PART_TIME,
          HIRE_DT, LAST_HIRE_DT, status_code
   FROM omsadm.employee_mv e
   WHERE {root_where}
   UNION ALL
-  SELECT e.ID, e.FIRST_NAME, e.LAST_NAME, e.USERNAME, e.EMPLOYEE_ID, e.SUPERVISORID, e.SUPERVISOR_NAME,
+  SELECT e.EMPLOYEE_ID, e.FIRST_NAME, e.LAST_NAME, e.USERNAME, e.EMPLOYEE_ID, e.SUPERVISORID, e.SUPERVISOR_NAME,
          e.DEPARTMENT, e.JOB_TITLE, e.JOB_CODE, e.BU_CODE, e.COMPANY, e.TREE_BRANCH, e.FULL_PART_TIME,
          e.HIRE_DT, e.LAST_HIRE_DT, e.status_code
   FROM omsadm.employee_mv e
-  INNER JOIN cte ON cte.ID = e.SUPERVISORID
-  WHERE status_code != 'T'{f" AND e.ID <> '{person_id}'" if mode == 'by_person' and person_id else ''}
+  INNER JOIN cte ON cte.EMPLOYEE_ID = e.SUPERVISORID
+  WHERE status_code != 'T'{f" AND e.EMPLOYEE_ID <> '{person_id}'" if mode == 'by_person' and person_id else ''}
 )"""
     
     # Build additional filters
@@ -103,7 +103,7 @@ def generate_hierarchy_sql(
     
     if exclude_root and mode == "by_person":
         if person_id:
-            filter_where_parts.append(f"cte.ID <> '{person_id}'")
+            filter_where_parts.append(f"cte.EMPLOYEE_ID <> '{person_id}'")
     
     where_clause = ""
     if filter_where_parts:
