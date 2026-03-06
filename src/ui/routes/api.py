@@ -164,9 +164,9 @@ def init_api_routes(app, base_path: str):
             import tkinter as tk
             from tkinter.filedialog import askdirectory
 
-            # Create a hidden root window
+            # Create a small topmost root window
             root = tk.Tk()
-            root.withdraw()
+            root.geometry('1x1+0+0')
             root.attributes('-topmost', True)
 
             # Open folder picker
