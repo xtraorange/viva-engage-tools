@@ -31,10 +31,11 @@ def generate_hierarchy_sql(
         # Build the WHERE clause to find the root employee
         where_parts = ["status_code != 'T'"]
         
-        if person_id:
-            where_parts.append(f"AND EMPLOYEE_ID = '{person_id}'")
-        elif person_username:
+        # prefer username lookup if available (per user request)
+        if person_username:
             where_parts.append(f"AND USERNAME = '{person_username}'")
+        elif person_id:
+            where_parts.append(f"AND EMPLOYEE_ID = '{person_id}'")
         elif person_first_name and person_last_name:
             where_parts.append(f"AND FIRST_NAME = '{person_first_name}' AND LAST_NAME = '{person_last_name}'")
         elif person_first_name:
@@ -65,9 +66,17 @@ def generate_hierarchy_sql(
     
     # Build a friendly comment indicating the root employee (if known)
     comment = ''
-    if mode == 'by_person' and (person_first_name or person_last_name):
-        name = ' '.join(filter(None, [person_first_name, person_last_name]))
-        comment = f"-- hierarchy root: {name} (id={person_id})\n"
+    if mode == 'by_person':
+        # build descriptive comment with whatever identifying info we have
+        parts = []
+        if person_first_name or person_last_name:
+            parts.append(' '.join(filter(None, [person_first_name, person_last_name])))
+        if person_username:
+            parts.append(f"username={person_username}")
+        if person_id:
+            parts.append(f"id={person_id}")
+        if parts:
+            comment = "-- hierarchy root: " + " / ".join(parts) + "\n"
 
     # Build the hierarchy CTE with only necessary columns for clarity
     hierarchy_cte = comment + f"""WITH cte AS (
@@ -78,7 +87,7 @@ def generate_hierarchy_sql(
   SELECT e.EMPLOYEE_ID, e.USERNAME
   FROM omsadm.employee_mv e
   INNER JOIN cte ON cte.EMPLOYEE_ID = e.SUPERVISORID
-  WHERE status_code != 'T'{f" AND e.EMPLOYEE_ID <> '{person_id}'" if mode == 'by_person' and person_id else ''}
+  WHERE status_code != 'T'{f" AND e.USERNAME <> '{person_username}'" if mode=='by_person' and person_username else (f" AND e.EMPLOYEE_ID <> '{person_id}'" if mode=='by_person' and person_id else '')}
 )"""
     
     # Build additional filters
@@ -104,7 +113,10 @@ def generate_hierarchy_sql(
         filter_where_parts.append(f"cte.FULL_PART_TIME = '{filter_full_part_time}'")
     
     if exclude_root and mode == "by_person":
-        if person_id:
+        # exclude root using whichever identifier was used
+        if person_username:
+            filter_where_parts.append(f"cte.USERNAME <> '{person_username}'")
+        elif person_id:
             filter_where_parts.append(f"cte.EMPLOYEE_ID <> '{person_id}'")
     
     where_clause = ""

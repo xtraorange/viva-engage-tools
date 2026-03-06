@@ -26,10 +26,26 @@ def init_api_routes(app, base_path: str):
             from ...db import DatabaseExecutor
             executor = DatabaseExecutor(cfg.get("oracle_tns"))
 
-            # Search across ID, name, and username (case-insensitive)
+            # Build search conditions with support for full-name and partial name matching
+            conds = []
+            conds.append(f"UPPER(EMPLOYEE_ID) LIKE UPPER('%{query}%')")
+            conds.append(f"UPPER(FIRST_NAME) LIKE UPPER('%{query}%')")
+            conds.append(f"UPPER(LAST_NAME) LIKE UPPER('%{query}%')")
+            conds.append(f"UPPER(USERNAME) LIKE UPPER('%{query}%')")
+            # concatenated full name
+            conds.append(f"UPPER(FIRST_NAME || ' ' || LAST_NAME) LIKE UPPER('%{query}%')")
+            # if query contains two words, also try first/last separately
+            if ' ' in query:
+                parts = query.split()
+                if len(parts) >= 2:
+                    first_part = parts[0]
+                    last_part = parts[-1]
+                    conds.append(f"(UPPER(FIRST_NAME) LIKE UPPER('%{first_part}%') AND UPPER(LAST_NAME) LIKE UPPER('%{last_part}%'))")
+
+            where_clause = " OR ".join(conds)
             sql = f"""
             SELECT EMPLOYEE_ID, FIRST_NAME, LAST_NAME, USERNAME FROM omsadm.employee_mv
-            WHERE (UPPER(EMPLOYEE_ID) LIKE UPPER('%{query}%') OR UPPER(FIRST_NAME) LIKE UPPER('%{query}%') OR UPPER(LAST_NAME) LIKE UPPER('%{query}%') OR UPPER(USERNAME) LIKE UPPER('%{query}%'))
+            WHERE ({where_clause})
             AND status_code != 'T'
             ORDER BY FIRST_NAME, LAST_NAME
             """
