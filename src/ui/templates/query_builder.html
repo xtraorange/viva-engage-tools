@@ -227,18 +227,22 @@
   const personSuggestions = document.getElementById('person-suggestions');
   const selectedPersonDiv = document.getElementById('selected-person');
 
-  personSearchInput.addEventListener('input', async (e) => {
+  let personSearchTimer = null;
+  personSearchInput.addEventListener('input', (e) => {
     const query = e.target.value.trim();
+    clearTimeout(personSearchTimer);
     if (query.length < 2) {
       personSuggestions.style.display = 'none';
       return;
     }
-
-    try {
-      const response = await fetch(`/api/search-employees?q=${encodeURIComponent(query)}`);
-      const employees = await response.json();
-      
-      if (Array.isArray(employees) && employees.length > 0) {
+    personSearchTimer = setTimeout(async () => {
+      try {
+        const response = await fetch(`/api/search-employees?q=${encodeURIComponent(query)}`);
+        const employees = await response.json();
+        // ensure the input hasn't changed since we started
+        if (personSearchInput.value.trim() !== query) return;
+        
+        if (Array.isArray(employees) && employees.length > 0) {
         personSuggestions.innerHTML = employees.map(emp => `
           <a href="#" class="list-group-item list-group-item-action" data-id="${emp.id}" data-first="${emp.first_name}" data-last="${emp.last_name}" data-username="${emp.username}">
             <strong>${emp.first_name} ${emp.last_name}</strong><br>

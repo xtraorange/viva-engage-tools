@@ -79,7 +79,8 @@ def generate_hierarchy_sql(
             comment = "-- hierarchy root: " + " / ".join(parts) + "\n"
 
     # Build the hierarchy CTE with only necessary columns for clarity
-    hierarchy_cte = comment + f"""WITH cte AS (
+    # Oracle requires column aliases in recursive WITH clauses
+    hierarchy_cte = comment + f"""WITH cte (EMPLOYEE_ID, USERNAME) AS (
   SELECT EMPLOYEE_ID, USERNAME
   FROM omsadm.employee_mv e
   WHERE {root_where}
