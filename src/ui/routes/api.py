@@ -25,21 +25,15 @@ def init_api_routes(app, base_path: str):
             from ...db import DatabaseExecutor
             executor = DatabaseExecutor(cfg.get("oracle_tns"))
 
-            # First test basic connection
-            test_sql = "SELECT 1 FROM dual"
-            test_result = executor.run_query(test_sql)
-            print(f"DEBUG: Database connection test: {test_result}")  # Debug log
-
             # Search across ID, name, and username (case-insensitive)
             sql = f"""
             SELECT ID, FIRST_NAME, LAST_NAME, USERNAME FROM omsadm.employee_mv
             WHERE (UPPER(ID) LIKE UPPER('%{query}%') OR UPPER(FIRST_NAME) LIKE UPPER('%{query}%') OR UPPER(LAST_NAME) LIKE UPPER('%{query}%') OR UPPER(USERNAME) LIKE UPPER('%{query}%'))
-            AND Terminated IS NULL
+            AND status_code != 'T'
             ORDER BY FIRST_NAME, LAST_NAME
             """
 
             results = executor.run_query(sql)
-            print(f"DEBUG: Search query '{query}' returned {len(results)} results")  # Debug log
             items = [
                 {"id": row[0], "first_name": row[1], "last_name": row[2], "username": row[3]}
                 for row in results[:20]  # Limit results
@@ -47,7 +41,6 @@ def init_api_routes(app, base_path: str):
             executor.close()
             return jsonify(items)
         except Exception as e:
-            print(f"DEBUG: Search error for '{query}': {str(e)}")  # Debug log
             return jsonify({"error": str(e)}), 500
 
     @api_bp.route("/api/search-job-titles", methods=["GET"])
@@ -62,7 +55,7 @@ def init_api_routes(app, base_path: str):
         try:
             from ...db import DatabaseExecutor
             executor = DatabaseExecutor(cfg.get("oracle_tns"))
-            sql = f"SELECT DISTINCT JOB_TITLE FROM omsadm.employee_mv WHERE JOB_TITLE LIKE '%{query}%' AND Terminated IS NULL ORDER BY JOB_TITLE"
+            sql = f"SELECT DISTINCT JOB_TITLE FROM omsadm.employee_mv WHERE JOB_TITLE LIKE '%{query}%' AND status_code != 'T' ORDER BY JOB_TITLE"
             results = executor.run_query(sql)
             items = [{"value": row[0]} for row in results[:20]]
             executor.close()
@@ -82,7 +75,7 @@ def init_api_routes(app, base_path: str):
         try:
             from ...db import DatabaseExecutor
             executor = DatabaseExecutor(cfg.get("oracle_tns"))
-            sql = f"SELECT DISTINCT BU_CODE FROM omsadm.employee_mv WHERE BU_CODE LIKE '%{query}%' AND Terminated IS NULL ORDER BY BU_CODE"
+            sql = f"SELECT DISTINCT BU_CODE FROM omsadm.employee_mv WHERE BU_CODE LIKE '%{query}%' AND status_code != 'T' ORDER BY BU_CODE"
             results = executor.run_query(sql)
             items = [{"value": row[0]} for row in results[:20]]
             executor.close()
@@ -102,7 +95,7 @@ def init_api_routes(app, base_path: str):
         try:
             from ...db import DatabaseExecutor
             executor = DatabaseExecutor(cfg.get("oracle_tns"))
-            sql = f"SELECT DISTINCT COMPANY FROM omsadm.employee_mv WHERE COMPANY LIKE '%{query}%' AND Terminated IS NULL ORDER BY COMPANY"
+            sql = f"SELECT DISTINCT COMPANY FROM omsadm.employee_mv WHERE COMPANY LIKE '%{query}%' AND status_code != 'T' ORDER BY COMPANY"
             results = executor.run_query(sql)
             items = [{"value": row[0]} for row in results[:20]]
             executor.close()
@@ -122,7 +115,7 @@ def init_api_routes(app, base_path: str):
         try:
             from ...db import DatabaseExecutor
             executor = DatabaseExecutor(cfg.get("oracle_tns"))
-            sql = f"SELECT DISTINCT TREE_BRANCH FROM omsadm.employee_mv WHERE TREE_BRANCH LIKE '%{query}%' AND Terminated IS NULL ORDER BY TREE_BRANCH"
+            sql = f"SELECT DISTINCT TREE_BRANCH FROM omsadm.employee_mv WHERE TREE_BRANCH LIKE '%{query}%' AND status_code != 'T' ORDER BY TREE_BRANCH"
             results = executor.run_query(sql)
             items = [{"value": row[0]} for row in results[:20]]
             executor.close()
