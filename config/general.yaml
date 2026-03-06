@@ -1,6 +1,6 @@
 email_method: outlook
 max_workers: 4
-oracle_tns: OMSPRD
+oracle_tns: ENTER_TNS_HERE
 outlook_auto_send: false
-output_dir: ./../Viva Engage Member Lists
+output_dir: ./output
 update_info: {}
