@@ -83,55 +83,7 @@ def init_api_routes(app, base_path: str):
             # return full message if short number or generic
             return jsonify({"error": err_msg}), 500
 
-    @api_bp.route("/api/search-job-titles", methods=["GET"])
-    def search_job_titles():
-        """Typeahead search for job titles."""
-        cfg = config_service.load_general_config()
-        query = request.args.get("q", "").strip()
 
-        if not query or len(query) < 1:
-            return jsonify([])
-
-        try:
-            from ...db import DatabaseExecutor
-            executor = DatabaseExecutor(cfg.get("oracle_tns"))
-            sql = f"SELECT DISTINCT JOB_TITLE FROM omsadm.employee_mv WHERE JOB_TITLE LIKE '%{query}%' AND status_code != 'T' ORDER BY JOB_TITLE"
-            results = executor.run_query(sql)
-            items = []
-            for row in results[:20]:
-                if isinstance(row, dict):
-                    value = next(iter(row.values()), None)
-                else:
-                    value = row[0]
-                items.append({"value": value})
-            executor.close()
-            return jsonify(items)
-        except Exception as e:
-
-    @api_bp.route("/api/search-bu-codes", methods=["GET"])
-    def search_bu_codes():
-        """Typeahead search for business unit codes."""
-        cfg = config_service.load_general_config()
-        query = request.args.get("q", "").strip()
-
-        if not query or len(query) < 1:
-            return jsonify([])
-
-        try:
-            from ...db import DatabaseExecutor
-            executor = DatabaseExecutor(cfg.get("oracle_tns"))
-            sql = f"SELECT DISTINCT BU_CODE FROM omsadm.employee_mv WHERE BU_CODE LIKE '%{query}%' AND status_code != 'T' ORDER BY BU_CODE"
-            results = executor.run_query(sql)
-            items = []
-            for row in results[:20]:
-                if isinstance(row, dict):
-                    value = next(iter(row.values()), None)
-                else:
-                    value = row[0]
-                items.append({"value": value})
-            executor.close()
-            return jsonify(items)
-        except Exception as e:
     @api_bp.route("/api/get-all-values", methods=["GET"])
     def get_all_values():
         """Generic endpoint to get all unique values for a field."""

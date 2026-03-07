@@ -179,18 +179,10 @@ def test_query_builder_routes(client):
     response = client.get("/api/search-employees?q=test")
     assert response.status_code in [200, 500]  # 500 is expected without DB
 
-    # Test attribute searches
-    response = client.get("/api/search-job-titles?q=test")
-    assert response.status_code in [200, 500]
-
-    response = client.get("/api/search-bu-codes?q=test")
-    assert response.status_code in [200, 500]
-
-    response = client.get("/api/search-companies?q=test")
-    assert response.status_code in [200, 500]
-
-    response = client.get("/api/search-tree-branches?q=test")
-    assert response.status_code in [200, 500]
+    # Test attribute searches via generic endpoint
+    for field in ["job_title", "bu_code", "company", "tree_branch"]:
+        response = client.get(f"/api/search-values?field={field}&q=test")
+        assert response.status_code in [200, 500]
 
     # Test SQL generation
     response = client.post("/api/generate-builder-sql", json={
