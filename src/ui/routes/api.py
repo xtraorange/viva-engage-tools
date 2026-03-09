@@ -136,6 +136,7 @@ def init_api_routes(app, base_path: str):
             return jsonify({"error": "Invalid field"}), 400
             
         try:
+            executor = DatabaseExecutor(cfg.get("oracle_tns"))
             if field == "job_title":
                 # Special case: search both JOB_CODE and JOB_TITLE
                 sql = f"SELECT DISTINCT JOB_CODE || ' - ' || JOB_TITLE as value FROM omsadm.employee_mv WHERE (UPPER(JOB_CODE) LIKE UPPER('%{query}%') OR UPPER(JOB_TITLE) LIKE UPPER('%{query}%')) AND status_code != 'T' ORDER BY value"

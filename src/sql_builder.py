@@ -2,10 +2,11 @@
 
 def generate_hierarchy_sql(
     mode: str,  # "by_person" or "by_attributes"
-    person_id: str = None,
+    persons: list = None,  # list of {person_id, person_username} dicts
+    person_id: str = None,  # deprecated: single person
     person_first_name: str = None,
     person_last_name: str = None,
-    person_username: str = None,
+    person_username: str = None,  # deprecated: single person
     attributes_job_title: str = None,
     attributes_bu_code: str = None,
     attributes_company: str = None,
@@ -21,27 +22,53 @@ def generate_hierarchy_sql(
     Generate a hierarchy query. 
     
     mode: "by_person" (search by name/id) or "by_attributes" (search by person attributes)
+    persons: list of persons with id and username for multiple person queries
     Returns: SQL query string
     """
     
     if mode == "by_person":
-        if not person_id and not (person_first_name or person_last_name or person_username):
-            raise ValueError("Must provide person_id or name/username for by_person mode")
+        # Handle multiple persons or single person (backward compatibility)
+        if not persons:
+            if not person_id and not (person_first_name or person_last_name or person_username):
+                raise ValueError("Must provide persons list or person_id/name/username for by_person mode")
+            # Convert single person to persons format
+            persons = [{"person_id": person_id, "person_username": person_username}]
         
-        # Build the WHERE clause to find the root employee
+        if not persons or len(persons) == 0:
+            raise ValueError("Must provide at least one person for by_person mode")
+        
+        # Build queries for each person and UNION them  
+        person_queries = []
+        exclude_conditions = []
+        
+        for person in persons:
+            pid = person.get('person_id')
+            pusername = person.get('person_username')
+            
+            where_parts = ["status_code != 'T'"]
+            
+            if pusername:
+                where_parts.append(f"AND USERNAME = '{pusername}'")
+            elif pid:
+                where_parts.append(f"AND EMPLOYEE_ID = '{pid}'")
+            
+            person_where = "\n".join(where_parts).replace("AND ", "", 1)
+            
+            if pusername:
+                exclude_conditions.append(f"cte.USERNAME <> '{pusername}'")
+            elif pid:
+                exclude_conditions.append(f"cte.EMPLOYEE_ID <> '{pid}'")
+        
+        # Build the first person's query
+        first_person = persons[0]
+        first_pid = first_person.get('person_id')
+        first_pusername = first_person.get('person_username')
+        
         where_parts = ["status_code != 'T'"]
-        
-        # prefer username lookup if available (per user request)
-        if person_username:
-            where_parts.append(f"AND USERNAME = '{person_username}'")
-        elif person_id:
-            where_parts.append(f"AND EMPLOYEE_ID = '{person_id}'")
-        elif person_first_name and person_last_name:
-            where_parts.append(f"AND FIRST_NAME = '{person_first_name}' AND LAST_NAME = '{person_last_name}'")
-        elif person_first_name:
-            where_parts.append(f"AND FIRST_NAME = '{person_first_name}'")
-        elif person_last_name:
-            where_parts.append(f"AND LAST_NAME = '{person_last_name}'")
+        if first_pusername:
+            where_parts.append(f"AND USERNAME = '{first_pusername}'")
+        elif first_pid:
+            where_parts.append(f"AND EMPLOYEE_ID = '{first_pid}'")
         
         root_where = "\n".join(where_parts)
         
@@ -64,25 +91,56 @@ def generate_hierarchy_sql(
     else:
         raise ValueError("mode must be 'by_person' or 'by_attributes'")
     
-    # Build a friendly comment indicating the root employee (if known)
+    # Build a friendly comment indicating the root employee(s) (if known)
     comment = ''
-    if mode == 'by_person':
-        # build descriptive comment with whatever identifying info we have
-        parts = []
-        if person_first_name or person_last_name:
-            parts.append(' '.join(filter(None, [person_first_name, person_last_name])))
-        if person_username:
-            parts.append(f"username={person_username}")
-        if person_id:
-            parts.append(f"id={person_id}")
-        if parts:
-            comment = "-- hierarchy root: " + " / ".join(parts) + "\n"
+    if mode == 'by_person' and persons:
+        person_strs = []
+        for person in persons:
+            if person.get('person_username'):
+                person_strs.append(f"username={person.get('person_username')}")
+            elif person.get('person_id'):
+                person_strs.append(f"id={person.get('person_id')}")
+        if person_strs:
+            comment = "-- hierarchy roots: " + " / ".join(person_strs) + "\n"
 
-    # Build the hierarchy using Oracle CONNECT BY syntax
-    # Oracle requires CONNECT BY for reliable hierarchy queries
-    # include additional columns so that downstream filters (job title, bu_code, etc.)
-    # can reference them without causing invalid identifier errors
-    hierarchy_sql = comment + f"""SELECT EMPLOYEE_ID,
+    # Build the hierarchy using Oracle CONNECT BY syntax for each person
+    hierarchy_parts = []
+    
+    if mode == 'by_person' and persons and len(persons) > 1:
+        # Multiple persons - build UNION query
+        for person in persons:
+            pid = person.get('person_id')
+            pusername = person.get('person_username')
+            
+            person_where = "status_code != 'T'"
+            if pusername:
+                person_where += f" AND USERNAME = '{pusername}'"
+            elif pid:
+                person_where += f" AND EMPLOYEE_ID = '{pid}'"
+            
+            connect_by_exclude = ""
+            if exclude_root:
+                if pusername:
+                    connect_by_exclude = f" AND USERNAME <> '{pusername}'"
+                elif pid:
+                    connect_by_exclude = f" AND EMPLOYEE_ID <> '{pid}'"
+            
+            hierarchy_parts.append(f"""SELECT EMPLOYEE_ID,
+       USERNAME,
+       JOB_TITLE,
+       BU_CODE,
+       COMPANY,
+       TREE_BRANCH,
+       FULL_PART_TIME
+FROM omsadm.employee_mv
+START WITH {person_where}
+CONNECT BY PRIOR EMPLOYEE_ID = SUPERVISOR_ID
+AND status_code != 'T'{connect_by_exclude}""")
+        
+        hierarchy_sql = comment + "\nUNION ALL\n".join(hierarchy_parts)
+    else:
+        # Single person or by_attributes
+        hierarchy_sql = comment + f"""SELECT EMPLOYEE_ID,
        USERNAME,
        JOB_TITLE,
        BU_CODE,
@@ -116,12 +174,14 @@ AND status_code != 'T'{f" AND USERNAME <> '{person_username}'" if mode=='by_pers
     if filter_full_part_time:
         filter_where_parts.append(f"cte.FULL_PART_TIME = '{filter_full_part_time}'")
     
-    if exclude_root and mode == "by_person":
-        # exclude root using whichever identifier was used
-        if person_username:
-            filter_where_parts.append(f"cte.USERNAME <> '{person_username}'")
-        elif person_id:
-            filter_where_parts.append(f"cte.EMPLOYEE_ID <> '{person_id}'")
+    if exclude_root and mode == "by_person" and persons and len(persons) == 1:
+        # exclude root using whichever identifier was used for single person
+        person = persons[0]
+        if person.get('person_username'):
+            filter_where_parts.append(f"cte.USERNAME <> '{person.get('person_username')}'")
+        elif person.get('person_id'):
+            filter_where_parts.append(f"cte.EMPLOYEE_ID <> '{person.get('person_id')}'")
+
     
     where_clause = ""
     if filter_where_parts:

@@ -27,15 +27,15 @@
           <!-- Hierarchy - By Person Tab -->
           <div class="tab-pane fade show active" id="by-person" role="tabpanel" aria-labelledby="by-person-tab">
             <div class="mb-3">
-              <label for="person-search" class="form-label">Find Employee</label>
+              <label for="person-search" class="form-label">Find Employee(s)</label>
+              <div id="person-tags" class="mb-2 d-flex flex-wrap gap-1"></div>
               <input type="text" class="form-control" id="person-search" placeholder="Search by ID, name, or username...">
               <div id="person-suggestions" class="list-group mt-2" style="display: none; max-height: 200px; overflow-y: auto;"></div>
-              <div id="selected-person" class="alert alert-info mt-2" style="display: none;"></div>
             </div>
             <div class="form-check">
               <input class="form-check-input" type="checkbox" id="person-exclude-root">
               <label class="form-check-label" for="person-exclude-root">
-                Exclude the selected person from results
+                Exclude the selected person(s) from results
               </label>
             </div>
           </div>
@@ -216,7 +216,34 @@
     // Trigger input event to update SQL
     input.dispatchEvent(new Event('input', { bubbles: true }));
   }
-  let selectedPerson = null;
+
+  // Person tag management
+  let selectedPersons = [];
+
+  function addPersonTag(person) {
+    const personStr = `${person.first_name} ${person.last_name} (${person.id})`;
+    if (!selectedPersons.find(p => p.id === person.id)) {
+      selectedPersons.push(person);
+    }
+    updatePersonTagsDisplay();
+  }
+
+  function removePersonTag(personId) {
+    selectedPersons = selectedPersons.filter(p => p.id !== personId);
+    updatePersonTagsDisplay();
+  }
+
+  function updatePersonTagsDisplay() {
+    const tagsDiv = document.getElementById('person-tags');
+    tagsDiv.innerHTML = selectedPersons.map(person => `
+      <span class="badge bg-primary d-inline-flex align-items-center gap-1">
+        ${person.first_name} ${person.last_name} (${person.id})
+        <button type="button" class="btn-close btn-close-white" aria-label="Remove" onclick="removePersonTag('${person.id}')"></button>
+      </span>
+    `).join('');
+    updateSQL();
+  }
+
   let currentSQL = '';
 
   // Field mapping for attribute search
@@ -409,10 +436,12 @@
   // Update on exclude root change
   document.getElementById('person-exclude-root').addEventListener('change', updateSQL);
 
-  // Person search typeahead
+  // Person search typeahead with tags
   const personSearchInput = document.getElementById('person-search');
   const personSuggestions = document.getElementById('person-suggestions');
-  const selectedPersonDiv = document.getElementById('selected-person');
+  
+  // Initialize fieldTags for persons
+  fieldTags['person-tags'] = [];
 
   let personSearchTimer = null;
   personSearchInput.addEventListener('input', (e) => {
@@ -441,29 +470,15 @@
         personSuggestions.querySelectorAll('a').forEach(item => {
           item.addEventListener('click', (e) => {
             e.preventDefault();
-            selectedPerson = {
+            const person = {
               id: item.dataset.id,
               first_name: item.dataset.first,
               last_name: item.dataset.last,
               username: item.dataset.username
             };
-            selectedPersonDiv.innerHTML = `
-              <strong>Selected:</strong> ${selectedPerson.first_name} ${selectedPerson.last_name} 
-              (${selectedPerson.id}) <br>
-              <button type="button" class="btn btn-sm btn-outline-secondary mt-1" id="btn-clear-person">Clear</button>
-            `;
-            selectedPersonDiv.style.display = 'block';
+            addPersonTag(person);
             personSearchInput.value = '';
             personSuggestions.style.display = 'none';
-            
-            updateSQL();  // Update SQL when person selected
-            
-            document.getElementById('btn-clear-person').addEventListener('click', () => {
-              selectedPerson = null;
-              selectedPersonDiv.style.display = 'none';
-              personSearchInput.value = '';
-              updateSQL();  // Update SQL when person cleared
-            });
           });
         });
         personSuggestions.style.display = 'block';
@@ -486,7 +501,7 @@
     let mode, payload;
 
     if (currentMode === 'by_person') {
-      if (!selectedPerson) {
+      if (selectedPersons.length === 0) {
         // Clear SQL if no person selected
         currentSQL = '';
         preview.value = '';
@@ -497,8 +512,10 @@
       mode = 'by_person';
       payload = {
         mode,
-        person_id: selectedPerson.id,
-        person_username: selectedPerson.username,
+        persons: selectedPersons.map(p => ({
+          person_id: p.id,
+          person_username: p.username
+        })),
         exclude_root: document.getElementById('person-exclude-root').checked,
       };
     } else {
