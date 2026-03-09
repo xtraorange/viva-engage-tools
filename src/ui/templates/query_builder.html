@@ -191,6 +191,7 @@
     const field = fieldMap[fieldId];
 
     input.addEventListener('input', (e) => {
+      console.log('Attribute input on', fieldId, 'query:', e.target.value.trim());
       const query = e.target.value.trim();
       if (query.length < 2) {
         suggestionsDiv.style.display = 'none';
@@ -200,8 +201,10 @@
       clearTimeout(attrSearchTimer);
       attrSearchTimer = setTimeout(async () => {
         try {
+          console.log('Fetching /api/search-values?field=' + field + '&q=' + query);
           const response = await fetch(`/api/search-values?field=${field}&q=${encodeURIComponent(query)}`);
           const data = await response.json();
+          console.log('Attribute search response:', data);
 
           if (Array.isArray(data) && data.length > 0) {
             suggestionsDiv.innerHTML = data.map(item => `
