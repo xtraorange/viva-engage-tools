@@ -99,28 +99,28 @@
           <label for="filter-job-titles" class="form-label">Job Title(s)/Job Code(s)</label>
           <div id="filter-job-titles-tags" class="mb-2 d-flex flex-wrap gap-1"></div>
           <input type="text" class="form-control" id="filter-job-titles" placeholder="Type to search...">
-          <div class="list-group" id="filter-job-titles-suggestions" style="display: none; position: absolute; z-index: 1000; max-height: 200px; overflow-y: auto;"></div>
+          <div class="list-group" id="filter-job-titles-suggestions" style="display: none; max-height: 200px; overflow-y: auto;"></div>
         </div>
 
         <div class="mb-3">
           <label for="filter-bu-codes" class="form-label">Business Unit(s)</label>
           <div id="filter-bu-codes-tags" class="mb-2 d-flex flex-wrap gap-1"></div>
           <input type="text" class="form-control" id="filter-bu-codes" placeholder="Type to search...">
-          <div class="list-group" id="filter-bu-codes-suggestions" style="display: none; position: absolute; z-index: 1000; max-height: 200px; overflow-y: auto;"></div>
+          <div class="list-group" id="filter-bu-codes-suggestions" style="display: none; max-height: 200px; overflow-y: auto;"></div>
         </div>
 
         <div class="mb-3">
           <label for="filter-companies" class="form-label">Companies (Countries)</label>
           <div id="filter-companies-tags" class="mb-2 d-flex flex-wrap gap-1"></div>
           <input type="text" class="form-control" id="filter-companies" placeholder="Type to search...">
-          <div class="list-group" id="filter-companies-suggestions" style="display: none; position: absolute; z-index: 1000; max-height: 200px; overflow-y: auto;"></div>
+          <div class="list-group" id="filter-companies-suggestions" style="display: none; max-height: 200px; overflow-y: auto;"></div>
         </div>
 
         <div class="mb-3">
           <label for="filter-tree-branches" class="form-label">Tree Branch(es)</label>
           <div id="filter-tree-branches-tags" class="mb-2 d-flex flex-wrap gap-1"></div>
           <input type="text" class="form-control" id="filter-tree-branches" placeholder="Type to search...">
-          <div class="list-group" id="filter-tree-branches-suggestions" style="display: none; position: absolute; z-index: 1000; max-height: 200px; overflow-y: auto;"></div>
+          <div class="list-group" id="filter-tree-branches-suggestions" style="display: none; max-height: 200px; overflow-y: auto;"></div>
         </div>
 
         <div class="mb-3">
@@ -400,10 +400,6 @@
           console.log('Filter search response:', data);
 
           if (Array.isArray(data) && data.length > 0) {
-            // Position the suggestions below the input
-            suggestionsDiv.style.top = (input.offsetTop + input.offsetHeight) + 'px';
-            suggestionsDiv.style.left = input.offsetLeft + 'px';
-            suggestionsDiv.style.width = input.offsetWidth + 'px';
             suggestionsDiv.innerHTML = data.map(item => `
               <a href="#" class="list-group-item list-group-item-action" data-value="${item.value}">
                 ${item.value}
@@ -420,10 +416,6 @@
             });
             suggestionsDiv.style.display = 'block';
           } else {
-            // Position the suggestions below the input
-            suggestionsDiv.style.top = (input.offsetTop + input.offsetHeight) + 'px';
-            suggestionsDiv.style.left = input.offsetLeft + 'px';
-            suggestionsDiv.style.width = input.offsetWidth + 'px';
             suggestionsDiv.innerHTML = '<div class="list-group-item text-muted">No results</div>';
             suggestionsDiv.style.display = 'block';
           }
