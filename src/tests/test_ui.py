@@ -180,9 +180,28 @@ def test_query_builder_routes(client):
     assert response.status_code in [200, 500]  # 500 is expected without DB
 
     # Test attribute searches via generic endpoint
+    # attribute searches via generic endpoint should not crash; additionally
+    # verify that the generated SQL is case-insensitive by inspecting the
+    # query when the DB executor is stubbed.
     for field in ["job_title", "bu_code", "company", "tree_branch"]:
+        called = {"sql": None}
+        class DummyExec:
+            def __init__(self, tns):
+                pass
+            def run_query(self, sql):
+                called["sql"] = sql
+                return []
+            def close(self):
+                pass
+        # monkeypatch the executor used in route
+        import src.ui.routes.api as api
+        monkeypatch = pytest.MonkeyPatch()
+        monkeypatch.setattr(api, 'DatabaseExecutor', DummyExec)
         response = client.get(f"/api/search-values?field={field}&q=test")
-        assert response.status_code in [200, 500]
+        assert response.status_code == 200
+        # ensure we built a case-insensitive query
+        assert "UPPER" in called["sql"]
+        monkeypatch.undo()
 
     # Test SQL generation
     response = client.post("/api/generate-builder-sql", json={
@@ -190,6 +209,23 @@ def test_query_builder_routes(client):
         "person_id": "12345"
     })
     assert response.status_code in [200, 400]
+    if response.status_code == 200:
+        data = response.get_json()
+        sql = data.get("sql", "")
+        assert "EMPLOYEE_ID" in sql
+
+    # test SQL generation with filters to ensure columns are included and filters applied
+    response = client.post("/api/generate-builder-sql", json={
+        "mode": "by_person",
+        "person_id": "00001",
+        "filter_bu_codes": ["abc"],
+        "filter_job_titles": ["mgr"]
+    })
+    assert response.status_code in [200, 400]
+    if response.status_code == 200:
+        sql = response.get_json().get("sql", "")
+        assert "BU_CODE" in sql
+        assert "JOB_TITLE" in sql
 
     # Test query testing
     response = client.post("/api/test-query", json={

@@ -80,7 +80,15 @@ def generate_hierarchy_sql(
 
     # Build the hierarchy using Oracle CONNECT BY syntax
     # Oracle requires CONNECT BY for reliable hierarchy queries
-    hierarchy_sql = comment + f"""SELECT EMPLOYEE_ID, USERNAME
+    # include additional columns so that downstream filters (job title, bu_code, etc.)
+    # can reference them without causing invalid identifier errors
+    hierarchy_sql = comment + f"""SELECT EMPLOYEE_ID,
+       USERNAME,
+       JOB_TITLE,
+       BU_CODE,
+       COMPANY,
+       TREE_BRANCH,
+       FULL_PART_TIME
 FROM omsadm.employee_mv
 START WITH {root_where.replace("status_code != 'T' AND ", "").replace("status_code != 'T'", "1=1")}
 CONNECT BY PRIOR EMPLOYEE_ID = SUPERVISOR_ID

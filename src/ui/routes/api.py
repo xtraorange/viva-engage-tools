@@ -139,7 +139,8 @@ def init_api_routes(app, base_path: str):
         
         try:
             executor = DatabaseExecutor(cfg.get("oracle_tns"))
-            sql = f"SELECT DISTINCT {column} FROM omsadm.employee_mv WHERE {column} LIKE '%{query}%' AND status_code != 'T' ORDER BY {column}"
+            # case-insensitive search to match uppercase Oracle data
+            sql = f"SELECT DISTINCT {column} FROM omsadm.employee_mv WHERE UPPER({column}) LIKE UPPER('%{query}%') AND status_code != 'T' ORDER BY {column}"
             results = executor.run_query(sql)
             items = []
             for row in results[:20]:
@@ -164,7 +165,7 @@ def init_api_routes(app, base_path: str):
 
         try:
             executor = DatabaseExecutor(cfg.get("oracle_tns"))
-            sql = f"SELECT DISTINCT TREE_BRANCH FROM omsadm.employee_mv WHERE TREE_BRANCH LIKE '%{query}%' AND status_code != 'T' ORDER BY TREE_BRANCH"
+            sql = f"SELECT DISTINCT TREE_BRANCH FROM omsadm.employee_mv WHERE UPPER(TREE_BRANCH) LIKE UPPER('%{query}%') AND status_code != 'T' ORDER BY TREE_BRANCH"
             results = executor.run_query(sql)
             items = []
             for row in results[:20]:
