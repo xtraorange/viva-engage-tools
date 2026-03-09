@@ -1,5 +1,14 @@
 """SQL query builder for generating hierachical employee queries."""
 
+
+def _extract_job_code(value: str) -> str:
+    """Return job code from values like 'CODE - TITLE' (or raw code if no separator)."""
+    if not value:
+        return value
+    if " - " in value:
+        return value.split(" - ", 1)[0].strip()
+    return value.strip()
+
 def generate_hierarchy_sql(
     mode: str,  # "by_person" or "by_attributes" or "all_employees"
     persons: list = None,  # list of {person_id, person_username} dicts
@@ -42,8 +51,8 @@ WHERE status_code != 'T'"""
         filter_where_parts = []
         
         if filter_job_titles:
-            job_titles_csv = ",".join([f"'{jt}'" for jt in filter_job_titles])
-            filter_where_parts.append(f"cte.JOB_TITLE IN ({job_titles_csv})")
+            job_codes_csv = ",".join([f"'{_extract_job_code(jt)}'" for jt in filter_job_titles])
+            filter_where_parts.append(f"cte.JOB_CODE IN ({job_codes_csv})")
         
         if filter_bu_codes:
             bu_codes_csv = ",".join([f"'{bc}'" for bc in filter_bu_codes])
@@ -122,7 +131,7 @@ FROM ({base_sql}) cte{where_clause}"""
         where_parts = ["status_code != 'T'"]
         
         if attributes_job_title:
-            where_parts.append(f"AND JOB_TITLE = '{attributes_job_title}'")
+            where_parts.append(f"AND JOB_CODE = '{_extract_job_code(attributes_job_title)}'")
         if attributes_bu_code:
             where_parts.append(f"AND BU_CODE = '{attributes_bu_code}'")
         if attributes_company:
@@ -199,8 +208,8 @@ AND status_code != 'T'{f" AND USERNAME <> '{person_username}'" if mode=='by_pers
     filter_where_parts = []
     
     if filter_job_titles:
-        job_titles_csv = ",".join([f"'{jt}'" for jt in filter_job_titles])
-        filter_where_parts.append(f"cte.JOB_TITLE IN ({job_titles_csv})")
+        job_codes_csv = ",".join([f"'{_extract_job_code(jt)}'" for jt in filter_job_titles])
+        filter_where_parts.append(f"cte.JOB_CODE IN ({job_codes_csv})")
     
     if filter_bu_codes:
         bu_codes_csv = ",".join([f"'{bc}'" for bc in filter_bu_codes])
