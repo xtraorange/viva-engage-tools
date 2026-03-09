@@ -3,15 +3,15 @@
 {% block title %}SQL Query Builder{% endblock %}
 
 {% block content %}
-<h1>SQL Query Builder</h1>
+<h1 class="mb-3">SQL Query Builder</h1>
 
 <div class="row">
-  <div class="col-lg-6">
-    <!-- STEP 1: Define Hierarchy Pool -->
+  <div class="col-lg-8">
+    <!-- STEP 1: Define Employee Pool -->
     <div class="card mb-4">
       <div class="card-header bg-primary text-white">
-        <h5 class="mb-0">Step 1: Define Hierarchy Pool</h5>
-        <small>Choose where your hierarchy starts from</small>
+        <h5 class="mb-0">Step 1: Define Employee Pool</h5>
+        <small>Choose the starting population from the employee table</small>
       </div>
       <div class="card-body">
         <ul class="nav nav-tabs" role="tablist">
@@ -99,28 +99,28 @@
           <label for="filter-job-titles" class="form-label">Job Title(s)/Job Code(s)</label>
           <div id="filter-job-titles-tags" class="mb-2 d-flex flex-wrap gap-1"></div>
           <input type="text" class="form-control" id="filter-job-titles" placeholder="Type to search...">
-          <div class="list-group" id="filter-job-titles-suggestions" style="display: none; max-height: 200px; overflow-y: auto;"></div>
+          <div class="list-group" id="filter-job-titles-suggestions" style="display: none; position: absolute; z-index: 1000; max-height: 200px; overflow-y: auto;"></div>
         </div>
 
         <div class="mb-3">
           <label for="filter-bu-codes" class="form-label">Business Unit(s)</label>
           <div id="filter-bu-codes-tags" class="mb-2 d-flex flex-wrap gap-1"></div>
           <input type="text" class="form-control" id="filter-bu-codes" placeholder="Type to search...">
-          <div class="list-group" id="filter-bu-codes-suggestions" style="display: none; max-height: 200px; overflow-y: auto;"></div>
+          <div class="list-group" id="filter-bu-codes-suggestions" style="display: none; position: absolute; z-index: 1000; max-height: 200px; overflow-y: auto;"></div>
         </div>
 
         <div class="mb-3">
           <label for="filter-companies" class="form-label">Companies (Countries)</label>
           <div id="filter-companies-tags" class="mb-2 d-flex flex-wrap gap-1"></div>
           <input type="text" class="form-control" id="filter-companies" placeholder="Type to search...">
-          <div class="list-group" id="filter-companies-suggestions" style="display: none; max-height: 200px; overflow-y: auto;"></div>
+          <div class="list-group" id="filter-companies-suggestions" style="display: none; position: absolute; z-index: 1000; max-height: 200px; overflow-y: auto;"></div>
         </div>
 
         <div class="mb-3">
           <label for="filter-tree-branches" class="form-label">Tree Branch(es)</label>
           <div id="filter-tree-branches-tags" class="mb-2 d-flex flex-wrap gap-1"></div>
           <input type="text" class="form-control" id="filter-tree-branches" placeholder="Type to search...">
-          <div class="list-group" id="filter-tree-branches-suggestions" style="display: none; max-height: 200px; overflow-y: auto;"></div>
+          <div class="list-group" id="filter-tree-branches-suggestions" style="display: none; position: absolute; z-index: 1000; max-height: 200px; overflow-y: auto;"></div>
         </div>
 
         <div class="mb-3">
@@ -133,8 +133,9 @@
         </div>
       </div>
     </div>
+  </div>
 
-  <div class="col-lg-6">
+  <div class="col-lg-4">
     <!-- SQL Preview -->
     <div class="card mb-3">
       <div class="card-header">
@@ -270,6 +271,13 @@
     'attr-tree-branch': 'tree_branch'
   };
 
+  const filterFieldMap = {
+    'filter-job-titles': 'job_title',
+    'filter-bu-codes': 'bu_code',
+    'filter-companies': 'company',
+    'filter-tree-branches': 'tree_branch'
+  };
+
   // Tab switching
   document.getElementById('by-person-tab').addEventListener('click', () => {
     currentMode = 'by_person';
@@ -372,7 +380,7 @@
     console.log('Setting up filter search for', fieldId);
     const input = document.getElementById(fieldId);
     const suggestionsDiv = document.getElementById(fieldId + '-suggestions');
-    const field = fieldMap[fieldId.replace('filter-', 'attr-')]; // map to same field
+    const field = filterFieldMap[fieldId];
 
     if (!input) {
       console.error('Input element not found:', fieldId);
@@ -400,6 +408,10 @@
           console.log('Filter search response:', data);
 
           if (Array.isArray(data) && data.length > 0) {
+            // Position the suggestions below the input
+            suggestionsDiv.style.top = (input.offsetTop + input.offsetHeight) + 'px';
+            suggestionsDiv.style.left = input.offsetLeft + 'px';
+            suggestionsDiv.style.width = input.offsetWidth + 'px';
             suggestionsDiv.innerHTML = data.map(item => `
               <a href="#" class="list-group-item list-group-item-action" data-value="${item.value}">
                 ${item.value}
@@ -416,6 +428,10 @@
             });
             suggestionsDiv.style.display = 'block';
           } else {
+            // Position the suggestions below the input
+            suggestionsDiv.style.top = (input.offsetTop + input.offsetHeight) + 'px';
+            suggestionsDiv.style.left = input.offsetLeft + 'px';
+            suggestionsDiv.style.width = input.offsetWidth + 'px';
             suggestionsDiv.innerHTML = '<div class="list-group-item text-muted">No results</div>';
             suggestionsDiv.style.display = 'block';
           }

@@ -241,11 +241,16 @@ def generate_safe_hierarchy_sql(**kwargs) -> str:
     Generate hierarchy SQL with basic injection prevention.
     Use this when values come from user input.
     """
-    # Basic sanitization: escape single quotes
-    for key in kwargs:
-        if isinstance(kwargs[key], str):
-            kwargs[key] = kwargs[key].replace("'", "''")
-        elif isinstance(kwargs[key], list):
-            kwargs[key] = [str(v).replace("'", "''") for v in kwargs[key]]
+    def sanitize(value):
+        if isinstance(value, str):
+            return value.replace("'", "''")
+        if isinstance(value, list):
+            return [sanitize(v) for v in value]
+        if isinstance(value, dict):
+            return {k: sanitize(v) for k, v in value.items()}
+        return value
+
+    # Basic sanitization: escape single quotes while preserving shapes
+    kwargs = {key: sanitize(value) for key, value in kwargs.items()}
     
     return generate_hierarchy_sql(**kwargs)
