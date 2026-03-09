@@ -75,21 +75,25 @@
         <div class="mb-3">
           <label for="filter-job-titles" class="form-label">Job Titles</label>
           <input type="text" class="form-control" id="filter-job-titles" placeholder="Comma-separated job title codes">
+          <div class="list-group" id="filter-job-titles-suggestions" style="display: none; position: absolute; z-index: 1000; max-height: 200px; overflow-y: auto;"></div>
         </div>
 
         <div class="mb-3">
           <label for="filter-bu-codes" class="form-label">Business Units</label>
           <input type="text" class="form-control" id="filter-bu-codes" placeholder="Comma-separated BU codes">
+          <div class="list-group" id="filter-bu-codes-suggestions" style="display: none; position: absolute; z-index: 1000; max-height: 200px; overflow-y: auto;"></div>
         </div>
 
         <div class="mb-3">
           <label for="filter-companies" class="form-label">Companies/Countries</label>
           <input type="text" class="form-control" id="filter-companies" placeholder="Comma-separated country codes">
+          <div class="list-group" id="filter-companies-suggestions" style="display: none; position: absolute; z-index: 1000; max-height: 200px; overflow-y: auto;"></div>
         </div>
 
         <div class="mb-3">
           <label for="filter-tree-branches" class="form-label">Tree Branches</label>
           <input type="text" class="form-control" id="filter-tree-branches" placeholder="Comma-separated branch codes">
+          <div class="list-group" id="filter-tree-branches-suggestions" style="display: none; position: absolute; z-index: 1000; max-height: 200px; overflow-y: auto;"></div>
         </div>
 
         <div class="mb-3">
@@ -256,7 +260,84 @@
     });
   });
 
-  // Debounced update for attributes
+  // Setup simple typeahead for filter fields (comma-separated)
+  const filterFields = ['filter-job-titles', 'filter-bu-codes', 'filter-companies', 'filter-tree-branches'];
+  let filterSearchTimer = null;
+
+  filterFields.forEach(fieldId => {
+    console.log('Setting up filter search for', fieldId);
+    const input = document.getElementById(fieldId);
+    const suggestionsDiv = document.getElementById(fieldId + '-suggestions');
+    const field = fieldMap[fieldId.replace('filter-', 'attr-')]; // map to same field
+
+    if (!input) {
+      console.error('Input element not found:', fieldId);
+      return;
+    }
+    if (!suggestionsDiv) {
+      console.error('Suggestions div not found:', fieldId + '-suggestions');
+      return;
+    }
+
+    input.addEventListener('input', (e) => {
+      console.log('Filter input on', fieldId, 'value:', e.target.value);
+      const value = e.target.value;
+      const lastComma = value.lastIndexOf(',');
+      const currentWord = value.substring(lastComma + 1).trim();
+      if (currentWord.length < 2) {
+        suggestionsDiv.style.display = 'none';
+        return;
+      }
+
+      clearTimeout(filterSearchTimer);
+      filterSearchTimer = setTimeout(async () => {
+        try {
+          console.log('Fetching /api/search-values?field=' + field + '&q=' + currentWord);
+          const response = await fetch(`/api/search-values?field=${field}&q=${encodeURIComponent(currentWord)}`);
+          const data = await response.json();
+          console.log('Filter search response:', data);
+
+          if (Array.isArray(data) && data.length > 0) {
+            // Position the suggestions below the input
+            suggestionsDiv.style.top = (input.offsetTop + input.offsetHeight) + 'px';
+            suggestionsDiv.style.left = input.offsetLeft + 'px';
+            suggestionsDiv.style.width = input.offsetWidth + 'px';
+            suggestionsDiv.innerHTML = data.map(item => `
+              <a href="#" class="list-group-item list-group-item-action" data-value="${item.value}">
+                ${item.value}
+              </a>
+            `).join('');
+
+            suggestionsDiv.querySelectorAll('a').forEach(a => {
+              a.addEventListener('click', (e) => {
+                e.preventDefault();
+                // Append to the current value
+                const prefix = value.substring(0, lastComma + 1) + (lastComma >= 0 ? ' ' : '');
+                input.value = prefix + a.dataset.value + ', ';
+                suggestionsDiv.style.display = 'none';
+                // updateSQL is called on input event
+              });
+            });
+            suggestionsDiv.style.display = 'block';
+          } else {
+            // Position the suggestions below the input
+            suggestionsDiv.style.top = (input.offsetTop + input.offsetHeight) + 'px';
+            suggestionsDiv.style.left = input.offsetLeft + 'px';
+            suggestionsDiv.style.width = input.offsetWidth + 'px';
+            suggestionsDiv.innerHTML = '<div class="list-group-item text-muted">No results</div>';
+            suggestionsDiv.style.display = 'block';
+          }
+        } catch (error) {
+          console.error('Filter search error:', error);
+        }
+      }, 300);
+    });
+
+    // Close suggestions on blur
+    input.addEventListener('blur', () => {
+      setTimeout(() => suggestionsDiv.style.display = 'none', 200);
+    });
+  });
   let attrUpdateTimer = null;
   const attrInputs = ['attr-job-title', 'attr-bu-code', 'attr-company', 'attr-tree-branch'];
   attrInputs.forEach(id => {
