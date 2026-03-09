@@ -159,41 +159,13 @@
   let selectedPerson = null;
   let currentSQL = '';
 
-  // Cache for attribute values (lazy loaded)
-  const caches = {
-    'attr-job-title': null,
-    'attr-bu-code': null,
-    'attr-company': null,
-    'attr-tree-branch': null
+  // Field mapping for attribute search
+  const fieldMap = {
+    'attr-job-title': 'job_title',
+    'attr-bu-code': 'bu_code',
+    'attr-company': 'company',
+    'attr-tree-branch': 'tree_branch'
   };
-
-  // Configuration for each field (educated guesses based on expected unique counts)
-  const fieldConfigs = {
-    'attr-job-title': { cache: false, field: 'job_title' },    // Many uniques (1000+), use live search
-    'attr-bu-code': { cache: true, field: 'bu_code' },         // Few uniques (50-200), use cache
-    'attr-company': { cache: true, field: 'company' },         // Few uniques (10-50), use cache
-    'attr-tree-branch': { cache: false, field: 'tree_branch' } // Many uniques (500+), use live search
-  };
-
-  // Lazy load cache for a field
-  async function loadCache(fieldId) {
-    if (caches[fieldId]) return caches[fieldId]; // Already loaded
-    
-    const config = fieldConfigs[fieldId];
-    if (!config.cache) return null;
-    
-    try {
-      console.log('Loading cache for', fieldId, 'field:', config.field);
-      const response = await fetch(`/api/get-all-values?field=${config.field}`);
-      const data = await response.json();
-      console.log('Cache data for', fieldId, ':', data);
-      caches[fieldId] = data;
-      return data;
-    } catch (error) {
-      console.error(`Error loading cache for ${fieldId}:`, error);
-      return [];
-    }
-  }
 
   // Tab switching
   document.getElementById('by-person-tab').addEventListener('click', () => {
@@ -209,69 +181,41 @@
   });
 
   // Typeahead function (configurable cache vs live)
-  function setupTypeahead(inputId, suggestionsId) {
-    const input = document.getElementById(inputId);
-    const suggestionsDiv = document.getElementById(suggestionsId);
-    const config = fieldConfigs[inputId];
+  // Setup simple typeahead for attribute fields (like person search)
+  const attrFields = ['attr-job-title', 'attr-bu-code', 'attr-company', 'attr-tree-branch'];
+  let attrSearchTimer = null;
 
-    input.addEventListener('input', async (e) => {
-      console.log('Typeahead input event on', inputId, 'query:', e.target.value.trim());
+  attrFields.forEach(fieldId => {
+    const input = document.getElementById(fieldId);
+    const suggestionsDiv = document.getElementById(fieldId + '-suggestions');
+    const field = fieldMap[fieldId];
+
+    input.addEventListener('input', (e) => {
       const query = e.target.value.trim();
-      if (query.length < 1) {
+      if (query.length < 2) {
         suggestionsDiv.style.display = 'none';
         return;
       }
 
-      if (config.cache) {
-        // Client-side filtering
-        const cache = await loadCache(inputId);
-        const matches = cache.filter(item => item && item.toLowerCase().includes(query.toLowerCase())).slice(0, 20);
-        
-        if (matches.length > 0) {
-          suggestionsDiv.innerHTML = matches.map(item => `
-            <a href="#" class="list-group-item list-group-item-action" data-value="${item}">
-              ${item}
-            </a>
-          `).join('');
-          
-          suggestionsDiv.querySelectorAll('a').forEach(item => {
-            item.addEventListener('click', (e) => {
-              e.preventDefault();
-              input.value = item.dataset.value;
-              suggestionsDiv.style.display = 'none';
-              if (currentMode === 'by_attributes') {
-                updateSQL();
-              }
-            });
-          });
-          suggestionsDiv.style.display = 'block';
-        } else {
-          suggestionsDiv.innerHTML = '<div class="list-group-item text-muted">No results</div>';
-          suggestionsDiv.style.display = 'block';
-        }
-      } else {
-        // Live search
+      clearTimeout(attrSearchTimer);
+      attrSearchTimer = setTimeout(async () => {
         try {
-          console.log('Fetching /api/search-values?field=' + config.field + '&q=' + query);
-          const response = await fetch(`/api/search-values?field=${config.field}&q=${encodeURIComponent(query)}`);
+          const response = await fetch(`/api/search-values?field=${field}&q=${encodeURIComponent(query)}`);
           const data = await response.json();
-          console.log('Search response:', data);
-          
+
           if (Array.isArray(data) && data.length > 0) {
             suggestionsDiv.innerHTML = data.map(item => `
               <a href="#" class="list-group-item list-group-item-action" data-value="${item.value}">
                 ${item.value}
               </a>
             `).join('');
-            
-            suggestionsDiv.querySelectorAll('a').forEach(item => {
-              item.addEventListener('click', (e) => {
+
+            suggestionsDiv.querySelectorAll('a').forEach(a => {
+              a.addEventListener('click', (e) => {
                 e.preventDefault();
-                input.value = item.dataset.value;
+                input.value = a.dataset.value;
                 suggestionsDiv.style.display = 'none';
-                if (currentMode === 'by_attributes') {
-                  updateSQL();
-                }
+                updateSQL();
               });
             });
             suggestionsDiv.style.display = 'block';
@@ -280,22 +224,16 @@
             suggestionsDiv.style.display = 'block';
           }
         } catch (error) {
-          console.error('Search error:', error);
+          console.error('Attribute search error:', error);
         }
-      }
+      }, 300);
     });
 
     // Close suggestions on blur
     input.addEventListener('blur', () => {
       setTimeout(() => suggestionsDiv.style.display = 'none', 200);
     });
-  }
-
-  // Setup typeahead for all attribute fields
-  setupTypeahead('attr-job-title', 'attr-job-title-suggestions');
-  setupTypeahead('attr-bu-code', 'attr-bu-code-suggestions');
-  setupTypeahead('attr-company', 'attr-company-suggestions');
-  setupTypeahead('attr-tree-branch', 'attr-tree-branch-suggestions');
+  });
 
   // Debounced update for attributes
   let attrUpdateTimer = null;
