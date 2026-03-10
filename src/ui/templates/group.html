@@ -43,27 +43,17 @@
         <legend class="mb-3">Query Configuration</legend>
         <input type="hidden" id="query_builder_json" name="query_builder_json" value='{{ config.query_builder_json | e }}'>
 
-        <div class="mb-3">
-          <label class="form-label">Builder Method and Parameters</label>
-          {% if config.has_override_query %}
-          <div class="alert alert-warning py-2">
-            Override SQL is active. Saved builder parameters are shown below but are ignored until override is removed.
-          </div>
-          {% endif %}
-          <pre id="builder-summary" class="form-control" style="min-height: 140px; white-space: pre-wrap;">No query builder parameters selected yet.</pre>
-          <button type="button" class="btn btn-sm btn-outline-primary mt-2" id="btn-use-builder">
-            🔨 Use Query Builder
-          </button>
+        {% if config.has_override_query %}
+        <div class="alert alert-warning py-2">
+          Override SQL is active. This script is used at runtime until removed.
         </div>
+        {% endif %}
 
+        {% if config.has_override_query %}
         <div class="mb-3">
-          <label for="query" class="form-label">Override SQL Script</label>
-          <textarea class="form-control font-monospace" id="query" name="query" rows="10" style="font-size: 0.9rem;" placeholder="Leave blank to use Query Builder parameters at report time.">{{ config.override_query }}</textarea>
-          <small class="form-text text-muted">If provided, this override script is used instead of generated SQL.</small>
-          {% if config.has_override_query %}
           <button
             type="submit"
-            class="btn btn-sm btn-outline-danger mt-2"
+            class="btn btn-sm btn-outline-danger"
             formmethod="post"
             formaction="{{ url_for('groups.remove_override', handle=group.handle) }}"
             formnovalidate
@@ -71,7 +61,21 @@
           >
             Remove Override SQL Script
           </button>
-          {% endif %}
+        </div>
+        {% else %}
+        <div class="mb-3">
+          <label class="form-label">Builder Method and Parameters</label>
+          <pre id="builder-summary" class="form-control" style="min-height: 140px; white-space: pre-wrap;">No query builder parameters selected yet.</pre>
+          <button type="button" class="btn btn-sm btn-outline-primary mt-2" id="btn-use-builder">
+            🔨 Use Query Builder
+          </button>
+        </div>
+        {% endif %}
+
+        <div class="mb-3">
+          <label for="query" class="form-label">Override SQL Script</label>
+          <textarea class="form-control font-monospace" id="query" name="query" rows="10" style="font-size: 0.9rem;" placeholder="Leave blank to use Query Builder parameters at report time.">{{ config.override_query }}</textarea>
+          <small class="form-text text-muted">If provided, this override script is used instead of generated SQL.</small>
         </div>
       </fieldset>
     </div>
@@ -99,6 +103,9 @@
   function updateBuilderSummary() {
     const raw = document.getElementById('query_builder_json').value;
     const summary = document.getElementById('builder-summary');
+    if (!summary) {
+      return;
+    }
     if (!raw || raw === '{}') {
       summary.textContent = 'No query builder parameters selected yet.';
       return;
@@ -152,6 +159,7 @@
   // Check if returning from query builder
   window.addEventListener('load', () => {
     restoreDraft();
+    updateBuilderSummary();
     const acceptedBuilderParams = sessionStorage.getItem('accepted_query_builder_params');
     if (acceptedBuilderParams) {
       document.getElementById('query_builder_json').value = acceptedBuilderParams;

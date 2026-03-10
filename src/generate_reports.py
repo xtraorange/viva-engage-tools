@@ -7,6 +7,46 @@ from .services.config_service import ConfigService
 from .services.group_service import GroupService
 from .services.report_service import ReportService
 from .group import Group
+from . import email_util, outlook_util
+
+
+def _email_report(group, general_cfg, csv_file, tracker, email_method=None):
+    """Backward-compatible email helper used by older tests/integrations."""
+    method = email_method or general_cfg.get("email_method", "smtp")
+    recipient = group.config.get("email_recipient") or general_cfg.get("email_recipient")
+
+    if not recipient:
+        tracker.update(group.handle, "skipped: no email recipient configured")
+        return False
+
+    subject = f"Viva Engage members - {group.display_name}"
+    body = f"Attached is the latest member list for {group.display_name}."
+
+    if method == "outlook":
+        if not outlook_util.OUTLOOK_AVAILABLE:
+            tracker.update(group.handle, "outlook unavailable")
+            return False
+        ok = outlook_util.send_via_outlook(
+            recipient=recipient,
+            subject=subject,
+            body=body,
+            csv_file=csv_file,
+            auto_send=general_cfg.get("outlook_auto_send", False),
+        )
+    else:
+        ok = email_util.send_email(
+            smtp_server=general_cfg.get("smtp_server"),
+            smtp_port=general_cfg.get("smtp_port", 25),
+            smtp_from=general_cfg.get("smtp_from", "reports@fastenal.com"),
+            recipient=recipient,
+            subject=subject,
+            body=body,
+            csv_file=csv_file,
+            use_tls=general_cfg.get("smtp_use_tls", False),
+        )
+
+    tracker.update(group.handle, "emailed" if ok else "email failed")
+    return ok
 
 
 def discover_groups(base_path: str) -> List[Group]:
@@ -107,8 +147,10 @@ def main():
     args = parser.parse_args()
 
     base = os.getcwd()
-    if not args.cli:
-        # start web interface by default
+    # Keep backward compatibility for CLI usage like: `python run_reports.py list`
+    # and only launch the web UI when no actionable CLI args are present.
+    should_launch_web = (not args.cli) and (not args.names) and (args.email is None)
+    if should_launch_web:
         from .ui import run_app
         run_app()
         return

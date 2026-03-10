@@ -52,6 +52,7 @@ def generate_hierarchy_sql(
     person_last_name: str = None,
     person_username: str = None,  # deprecated: single person
     attributes_job_title: str = None,
+    attributes_job_title_display: str = None,
     attributes_job_code: str = None,
     attributes_job_title_text: str = None,
     attributes_bu_code: str = None,
@@ -77,20 +78,7 @@ def generate_hierarchy_sql(
     """
     
     if mode == "all_employees":
-        # Simple query for all active employees, no hierarchy needed
-        base_sql = """SELECT EMPLOYEE_ID,
-       USERNAME,
-        JOB_CODE,
-       JOB_TITLE,
-        DEPARTMENT_ID,
-       BU_CODE,
-       COMPANY,
-       TREE_BRANCH,
-       FULL_PART_TIME
-FROM omsadm.employee_mv
-WHERE status_code != 'T'"""
-        
-        # Build filters
+        # Simple query for all active employees, no hierarchy needed.
         filter_where_parts = []
         
         job_code_filters = filter_job_codes or ([_extract_job_code(jt) for jt in (filter_job_titles or [])] if filter_job_titles else [])
@@ -116,14 +104,14 @@ WHERE status_code != 'T'"""
         
         if filter_full_part_time:
             filter_where_parts.append(f"cte.FULL_PART_TIME = '{filter_full_part_time}'")
-        
-        where_clause = ""
+
+        where_clause = "\nWHERE cte.status_code != 'T'"
         if filter_where_parts:
-            where_clause = "\nWHERE " + "\n  AND ".join(filter_where_parts)
-        
-        final_query = f"""SELECT cte.*
-FROM ({base_sql}) cte{where_clause}"""
-        
+            where_clause += "\n  AND " + "\n  AND ".join(filter_where_parts)
+
+        final_query = f"""SELECT cte.USERNAME
+FROM omsadm.employee_mv cte{where_clause}"""
+
         return final_query
     
     elif mode == "by_person":
@@ -227,8 +215,7 @@ FROM ({base_sql}) cte{where_clause}"""
             
             hierarchy_parts.append(f"""SELECT EMPLOYEE_ID,
        USERNAME,
-          JOB_CODE,
-       JOB_TITLE,
+         JOB_CODE,
         DEPARTMENT_ID,
        BU_CODE,
        COMPANY,
@@ -245,7 +232,6 @@ AND status_code != 'T'{connect_by_exclude}""")
         hierarchy_sql = f"""SELECT EMPLOYEE_ID,
        USERNAME,
         JOB_CODE,
-       JOB_TITLE,
         DEPARTMENT_ID,
        BU_CODE,
        COMPANY,

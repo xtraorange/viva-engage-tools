@@ -252,12 +252,13 @@ def init_updates_routes(app, base_path: str):
         func = request.environ.get('werkzeug.server.shutdown')
         if func:
             func()
+            return "Shutting down server for restart...", 200
+        if app.testing:
+            return "Shutting down server for restart (test mode)...", 200
         else:
             # fallback: force exit; launcher will restart because of flag
             import os
             os._exit(0)
-
-        return redirect(url_for("main.index"))
 
     @updates_bp.route("/email-templates", methods=["GET", "POST"])
     def email_templates():

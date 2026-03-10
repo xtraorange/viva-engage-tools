@@ -7,8 +7,8 @@ def setup_flask_app(base_path: str):
     """Set up Flask app with common configuration."""
     from flask import Flask
 
-    # ensure templates folder is located in the ui package
-    app = Flask(__name__, template_folder=os.path.join(base_path, "src", "ui", "templates"))
+    # Resolve templates from the ui package location, not current working directory.
+    app = Flask(__name__, template_folder="templates")
 
     # Suppress Flask/Werkzeug webserver output
     log = logging.getLogger('werkzeug')

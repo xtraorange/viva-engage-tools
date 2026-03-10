@@ -235,6 +235,27 @@
   let rolePreviewExpanded = false;
   let rolePreviewRoots = [];
 
+  function resetTestResult() {
+    const testResult = document.getElementById('test-result');
+    testResult.style.display = 'none';
+    testResult.textContent = '';
+  }
+
+  function activateModeTab(mode) {
+    const tabMap = {
+      by_person: 'by-person-tab',
+      by_role: 'by-role-tab',
+      all_employees: 'all-employees-tab'
+    };
+    const tabId = tabMap[mode] || 'by-person-tab';
+    const tabButton = document.getElementById(tabId);
+    if (window.bootstrap && window.bootstrap.Tab && tabButton) {
+      window.bootstrap.Tab.getOrCreateInstance(tabButton).show();
+    } else if (tabButton) {
+      tabButton.click();
+    }
+  }
+
   function showDbErrorBanner(message) {
     if (shownDbErrorBanner) {
       return;
@@ -670,6 +691,9 @@
     const btnTest = document.getElementById('btn-test-query');
     const btnAccept = document.getElementById('btn-accept-sql');
 
+    // SQL changed; clear prior test-query count until re-run.
+    resetTestResult();
+
     let mode, payload;
 
     if (currentMode === 'by_person') {
@@ -719,7 +743,8 @@
 
       payload = {
         mode,
-        attributes_job_title: jobTitle || null,
+        attributes_job_title: jobTitleText || null,
+        attributes_job_title_display: jobTitle || null,
         attributes_job_code: jobCode || null,
         attributes_job_title_text: jobTitleText || null,
         attributes_bu_code: buCode || null,
@@ -809,17 +834,18 @@
 
     const mode = params.mode || 'by_person';
     if (mode === 'by_role' || mode === 'by_attributes') {
-      document.getElementById('by-role-tab').click();
+      activateModeTab('by_role');
     } else if (mode === 'all_employees') {
-      document.getElementById('all-employees-tab').click();
+      activateModeTab('all_employees');
     } else {
-      document.getElementById('by-person-tab').click();
+      activateModeTab('by_person');
     }
 
     selectedPersons = Array.isArray(params.selected_person_details) ? params.selected_person_details : [];
     updatePersonTagsDisplay();
 
-    const displayAttrJob = params.attributes_job_title
+    const displayAttrJob = params.attributes_job_title_display
+      || params.attributes_job_title
       || ((params.attributes_job_code || '') + ((params.attributes_job_title_text || '') ? ` - ${params.attributes_job_title_text}` : '')).trim();
 
     const displayFilterJobs = (Array.isArray(params.filter_job_titles_display) && params.filter_job_titles_display.length > 0)

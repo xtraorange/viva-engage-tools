@@ -39,6 +39,7 @@ class Group:
             "person_username",
             "selected_person_details",
             "attributes_job_title",
+            "attributes_job_title_display",
             "attributes_job_code",
             "attributes_job_title_text",
             "attributes_bu_code",

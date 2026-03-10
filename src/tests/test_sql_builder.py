@@ -13,14 +13,22 @@ def test_hierarchy_sql_contains_filter_columns():
         filter_companies=["US"],
         filter_tree_branches=["A"],
     )
-    # Root SELECT should include all the additional fields
-    assert "JOB_TITLE" in sql
+    # Root SELECT should include fields necessary for filters
     assert "BU_CODE" in sql
     assert "COMPANY" in sql
     assert "TREE_BRANCH" in sql
     # filters should reference the cte alias
     assert "cte.JOB_CODE" in sql
     assert "cte.BU_CODE" in sql
+
+
+def test_hierarchy_sql_returns_only_username_column():
+    sql = generate_hierarchy_sql(
+        mode="by_person",
+        person_id="123",
+    )
+    assert "SELECT cte.USERNAME" in sql
+    assert "SELECT cte.*" not in sql
 
 
 def test_generate_safe_hierarchy_sql_escapes_quotes():
