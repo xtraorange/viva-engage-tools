@@ -4,6 +4,7 @@
 
 {% block content %}
 <h1 class="mb-3">SQL Query Builder</h1>
+<div id="db-error-banner" class="alert alert-danger" style="display: none;"></div>
 
 <div class="row">
   <div class="col-lg-8">
@@ -76,6 +77,21 @@
               <input type="text" class="form-control" id="attr-tree-branch" placeholder="Type to search...">
               <div id="attr-tree-branch-suggestions" class="list-group mt-2" style="display: none; max-height: 200px; overflow-y: auto;"></div>
             </div>
+            <div class="mb-3">
+              <label for="attr-department-id" class="form-label">Department ID(s)</label>
+              <div id="attr-department-id-tags" class="mb-2 d-flex flex-wrap gap-1"></div>
+              <input type="text" class="form-control" id="attr-department-id" placeholder="Type to search...">
+              <div id="attr-department-id-suggestions" class="list-group mt-2" style="display: none; max-height: 200px; overflow-y: auto;"></div>
+            </div>
+            <div class="card border-light bg-light mt-3">
+              <div class="card-body py-2">
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                  <strong class="small text-uppercase text-muted">Current Root Matches</strong>
+                  <span id="role-preview-count" class="badge bg-secondary">0</span>
+                </div>
+                <div id="role-preview-list" class="small text-muted">Add at least one condition to preview matching employees.</div>
+              </div>
+            </div>
           </div>
 
           <!-- All Employees Tab -->
@@ -121,6 +137,13 @@
           <div id="filter-tree-branches-tags" class="mb-2 d-flex flex-wrap gap-1"></div>
           <input type="text" class="form-control" id="filter-tree-branches" placeholder="Type to search...">
           <div class="list-group" id="filter-tree-branches-suggestions" style="display: none; position: absolute; z-index: 1000; max-height: 200px; overflow-y: auto;"></div>
+        </div>
+
+        <div class="mb-3">
+          <label for="filter-department-ids" class="form-label">Department ID(s)</label>
+          <div id="filter-department-ids-tags" class="mb-2 d-flex flex-wrap gap-1"></div>
+          <input type="text" class="form-control" id="filter-department-ids" placeholder="Type to search...">
+          <div class="list-group" id="filter-department-ids-suggestions" style="display: none; position: absolute; z-index: 1000; max-height: 200px; overflow-y: auto;"></div>
         </div>
 
         <div class="mb-3">
@@ -192,11 +215,25 @@
     'attr-bu-code': [],
     'attr-company': [],
     'attr-tree-branch': [],
+    'attr-department-id': [],
     'filter-job-titles': [],
     'filter-bu-codes': [],
     'filter-companies': [],
-    'filter-tree-branches': []
+    'filter-tree-branches': [],
+    'filter-department-ids': []
   };
+
+  let shownDbErrorBanner = false;
+
+  function showDbErrorBanner(message) {
+    if (shownDbErrorBanner) {
+      return;
+    }
+    const banner = document.getElementById('db-error-banner');
+    banner.textContent = `Database connection issue: ${message}`;
+    banner.style.display = 'block';
+    shownDbErrorBanner = true;
+  }
 
   // Tag management functions
   function addTag(fieldId, value) {
@@ -230,6 +267,9 @@
   function updateInputValue(fieldId) {
     const input = document.getElementById(fieldId);
     input.value = fieldTags[fieldId].join(', ');
+    if (fieldId.startsWith('attr-')) {
+      updateRolePreview();
+    }
     // Update SQL when tags change
     updateSQL();
   }
@@ -254,7 +294,7 @@
     const tagsDiv = document.getElementById('person-tags');
     tagsDiv.innerHTML = selectedPersons.map(person => `
       <span class="badge bg-primary d-inline-flex align-items-center gap-1">
-        ${person.first_name} ${person.last_name} (${person.id})
+        ${person.first_name} ${person.last_name} - ${person.job_title || 'No title'}
         <button type="button" class="btn-close btn-close-white" aria-label="Remove" onclick="removePersonTag('${person.id}')"></button>
       </span>
     `).join('');
@@ -268,14 +308,16 @@
     'attr-job-title': 'job_title',
     'attr-bu-code': 'bu_code',
     'attr-company': 'company',
-    'attr-tree-branch': 'tree_branch'
+    'attr-tree-branch': 'tree_branch',
+    'attr-department-id': 'department_id'
   };
 
   const filterFieldMap = {
     'filter-job-titles': 'job_title',
     'filter-bu-codes': 'bu_code',
     'filter-companies': 'company',
-    'filter-tree-branches': 'tree_branch'
+    'filter-tree-branches': 'tree_branch',
+    'filter-department-ids': 'department_id'
   };
 
   // Tab switching
@@ -288,6 +330,7 @@
 
   document.getElementById('by-role-tab').addEventListener('click', () => {
     currentMode = 'by_attributes';
+    updateRolePreview();
     updateSQL();
   });
 
@@ -298,7 +341,7 @@
 
   // Typeahead function (configurable cache vs live)
   // Setup simple typeahead for attribute fields (like person search)
-  const attrFields = ['attr-job-title', 'attr-bu-code', 'attr-company', 'attr-tree-branch'];
+  const attrFields = ['attr-job-title', 'attr-bu-code', 'attr-company', 'attr-tree-branch', 'attr-department-id'];
   let attrSearchTimer = null;
 
   attrFields.forEach(fieldId => {
@@ -332,6 +375,12 @@
           const data = await response.json();
           console.log('Attribute search response:', data);
 
+          if (data && data.error) {
+            showDbErrorBanner(data.error);
+            suggestionsDiv.style.display = 'none';
+            return;
+          }
+
           if (Array.isArray(data) && data.length > 0) {
             // Position the suggestions below the input
             suggestionsDiv.style.top = (input.offsetTop + input.offsetHeight) + 'px';
@@ -362,6 +411,7 @@
           }
         } catch (error) {
           console.error('Attribute search error:', error);
+          showDbErrorBanner(error);
         }
       }, 300);
     });
@@ -373,7 +423,7 @@
   });
 
   // Setup simple typeahead for filter fields (comma-separated)
-  const filterFields = ['filter-job-titles', 'filter-bu-codes', 'filter-companies', 'filter-tree-branches'];
+  const filterFields = ['filter-job-titles', 'filter-bu-codes', 'filter-companies', 'filter-tree-branches', 'filter-department-ids'];
   let filterSearchTimer = null;
 
   filterFields.forEach(fieldId => {
@@ -407,6 +457,12 @@
           const data = await response.json();
           console.log('Filter search response:', data);
 
+          if (data && data.error) {
+            showDbErrorBanner(data.error);
+            suggestionsDiv.style.display = 'none';
+            return;
+          }
+
           if (Array.isArray(data) && data.length > 0) {
             // Position the suggestions below the input
             suggestionsDiv.style.top = (input.offsetTop + input.offsetHeight) + 'px';
@@ -437,6 +493,7 @@
           }
         } catch (error) {
           console.error('Filter search error:', error);
+          showDbErrorBanner(error);
         }
       }, 300);
     });
@@ -472,12 +529,18 @@
         const employees = await response.json();
         // ensure the input hasn't changed since we started
         if (personSearchInput.value.trim() !== query) return;
+
+        if (employees && employees.error) {
+          showDbErrorBanner(employees.error);
+          personSuggestions.style.display = 'none';
+          return;
+        }
         
         if (Array.isArray(employees) && employees.length > 0) {
         personSuggestions.innerHTML = employees.map(emp => `
-          <a href="#" class="list-group-item list-group-item-action" data-id="${emp.id}" data-first="${emp.first_name}" data-last="${emp.last_name}" data-username="${emp.username}">
+          <a href="#" class="list-group-item list-group-item-action" data-id="${emp.id}" data-first="${emp.first_name}" data-last="${emp.last_name}" data-username="${emp.username}" data-job-title="${emp.job_title || ''}">
             <strong>${emp.first_name} ${emp.last_name}</strong><br>
-            <small>${emp.id} • ${emp.username}</small>
+            <small>${emp.job_title || 'No title'} • ${emp.username}</small>
           </a>
         `).join('');
         
@@ -488,7 +551,8 @@
               id: item.dataset.id,
               first_name: item.dataset.first,
               last_name: item.dataset.last,
-              username: item.dataset.username
+              username: item.dataset.username,
+              job_title: item.dataset.jobTitle || ''
             };
             addPersonTag(person);
             personSearchInput.value = '';
@@ -502,9 +566,61 @@
       }
     } catch (error) {
       console.error('Search error:', error);
+      showDbErrorBanner(error);
     }
   });
   });
+
+  async function updateRolePreview() {
+    const list = document.getElementById('role-preview-list');
+    const count = document.getElementById('role-preview-count');
+    const params = new URLSearchParams({
+      job_title: fieldTags['attr-job-title'][0] || '',
+      bu_code: fieldTags['attr-bu-code'][0] || '',
+      company: fieldTags['attr-company'][0] || '',
+      tree_branch: fieldTags['attr-tree-branch'][0] || '',
+      department_id: fieldTags['attr-department-id'][0] || '',
+    });
+
+    if (![...params.values()].some(v => v)) {
+      count.textContent = '0';
+      list.className = 'small text-muted';
+      list.textContent = 'Add at least one condition to preview matching employees.';
+      return;
+    }
+
+    try {
+      const response = await fetch(`/api/preview-role-roots?${params.toString()}`);
+      const employees = await response.json();
+      if (employees && employees.error) {
+        showDbErrorBanner(employees.error);
+        count.textContent = '0';
+        list.className = 'small text-danger';
+        list.textContent = 'Unable to load preview.';
+        return;
+      }
+
+      count.textContent = String(employees.length || 0);
+      if (!Array.isArray(employees) || employees.length === 0) {
+        list.className = 'small text-muted';
+        list.textContent = 'No employees match current conditions.';
+        return;
+      }
+
+      list.className = 'small';
+      list.innerHTML = employees.map(emp => `
+        <div class="mb-1">
+          <strong>${emp.first_name} ${emp.last_name}</strong><br>
+          <span class="text-muted">${emp.job_title || 'No title'} • ${emp.username}</span>
+        </div>
+      `).join('');
+    } catch (error) {
+      showDbErrorBanner(error);
+      count.textContent = '0';
+      list.className = 'small text-danger';
+      list.textContent = 'Unable to load preview.';
+    }
+  }
 
   // Generate Query function (now for continuous updates)
   async function updateSQL() {
@@ -538,8 +654,9 @@
       const buCode = fieldTags['attr-bu-code'][0] || '';
       const company = fieldTags['attr-company'][0] || '';
       const branch = fieldTags['attr-tree-branch'][0] || '';
+      const departmentId = fieldTags['attr-department-id'][0] || '';
 
-      if (!jobTitle && !buCode && !company && !branch) {
+      if (!jobTitle && !buCode && !company && !branch && !departmentId) {
         // Clear SQL if no attributes
         currentSQL = '';
         preview.value = '';
@@ -554,6 +671,7 @@
         attributes_bu_code: buCode || null,
         attributes_company: company || null,
         attributes_tree_branch: branch || null,
+        attributes_department_id: departmentId || null,
       };
     } else if (currentMode === 'all_employees') {
       mode = 'all_employees';
@@ -565,6 +683,7 @@
     payload.filter_bu_codes = fieldTags['filter-bu-codes'] || [];
     payload.filter_companies = fieldTags['filter-companies'] || [];
     payload.filter_tree_branches = fieldTags['filter-tree-branches'] || [];
+    payload.filter_department_ids = fieldTags['filter-department-ids'] || [];
     payload.filter_full_part_time = document.getElementById('filter-full-part-time').value || null;
 
     try {
@@ -576,6 +695,7 @@
 
       const data = await response.json();
       if (data.error) {
+        showDbErrorBanner(data.error);
         preview.value = 'Error: ' + data.error;
         btnTest.style.display = 'none';
         btnAccept.style.display = 'none';
@@ -587,6 +707,7 @@
       btnTest.style.display = 'inline-block';
       btnAccept.style.display = 'inline-block';
     } catch (error) {
+      showDbErrorBanner(error);
       preview.value = 'Error generating SQL: ' + error;
       btnTest.style.display = 'none';
       btnAccept.style.display = 'none';
@@ -605,12 +726,14 @@
 
       const data = await response.json();
       if (data.error) {
+        showDbErrorBanner(data.error);
         testResult.innerHTML = `<strong class="text-danger">Error:</strong> ${data.error}`;
       } else {
         testResult.innerHTML = `<strong>Result:</strong> ${data.count} records found`;
       }
       testResult.style.display = 'block';
     } catch (error) {
+      showDbErrorBanner(error);
       testResult.innerHTML = `<strong class="text-danger">Error:</strong> ${error}`;
       testResult.style.display = 'block';
     }

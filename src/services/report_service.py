@@ -124,7 +124,7 @@ class ReportService:
             # Write CSV
             tracker.update(handle, "writing CSV")
             executor.write_csv(rows, None, fullpath)
-            tracker.update(handle, f"written {fullpath}")
+            tracker.update(handle, f"written {os.path.basename(fullpath)}")
 
             # Send individual email if requested and not using bulk override
             if should_email and not override_email:

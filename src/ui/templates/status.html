@@ -50,10 +50,14 @@ function updateStatus() {
       groupStatus.innerHTML = '';
       for (const [handle, status] of Object.entries(data.status)) {
         const li = document.createElement('li');
-        li.className = 'list-group-item d-flex justify-content-between align-items-center';
+        li.className = 'list-group-item d-flex justify-content-between align-items-start';
+        const compact = (status || '').length > 80 ? `${status.slice(0, 77)}...` : (status || 'pending');
         li.innerHTML = `
-          ${handle}
-          <span class="badge bg-${status === 'completed' ? 'success' : status === 'running' ? 'primary' : 'secondary'}">${status}</span>
+          <div class="me-2" style="min-width: 0;">
+            <div><strong>${handle}</strong></div>
+            <div class="text-muted small" title="${status || ''}">${compact}</div>
+          </div>
+          <span class="badge bg-${String(status).startsWith('failed') ? 'danger' : (String(status).includes('written') ? 'success' : 'secondary')}">${String(status).startsWith('failed') ? 'failed' : (String(status).includes('written') ? 'completed' : 'running')}</span>
         `;
         groupStatus.appendChild(li);
       }

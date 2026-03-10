@@ -20,10 +20,12 @@ def generate_hierarchy_sql(
     attributes_bu_code: str = None,
     attributes_company: str = None,
     attributes_tree_branch: str = None,
+    attributes_department_id: str = None,
     filter_job_titles: list = None,
     filter_bu_codes: list = None,
     filter_companies: list = None,
     filter_tree_branches: list = None,
+    filter_department_ids: list = None,
     filter_full_part_time: str = None,
     exclude_root: bool = False,
 ) -> str:
@@ -41,6 +43,7 @@ def generate_hierarchy_sql(
        USERNAME,
         JOB_CODE,
        JOB_TITLE,
+        DEPARTMENT_ID,
        BU_CODE,
        COMPANY,
        TREE_BRANCH,
@@ -58,6 +61,10 @@ WHERE status_code != 'T'"""
         if filter_bu_codes:
             bu_codes_csv = ",".join([f"'{bc}'" for bc in filter_bu_codes])
             filter_where_parts.append(f"cte.BU_CODE IN ({bu_codes_csv})")
+
+        if filter_department_ids:
+            department_ids_csv = ",".join([f"'{d}'" for d in filter_department_ids])
+            filter_where_parts.append(f"cte.DEPARTMENT_ID IN ({department_ids_csv})")
         
         if filter_companies:
             companies_csv = ",".join([f"'{c}'" for c in filter_companies])
@@ -126,7 +133,13 @@ FROM ({base_sql}) cte{where_clause}"""
         root_where = "\n".join(where_parts)
         
     elif mode == "by_attributes":
-        if not (attributes_job_title or attributes_bu_code or attributes_company or attributes_tree_branch):
+        if not (
+            attributes_job_title
+            or attributes_bu_code
+            or attributes_company
+            or attributes_tree_branch
+            or attributes_department_id
+        ):
             raise ValueError("Must provide at least one attribute for by_attributes mode")
         
         where_parts = ["status_code != 'T'"]
@@ -139,6 +152,8 @@ FROM ({base_sql}) cte{where_clause}"""
             where_parts.append(f"AND COMPANY = '{attributes_company}'")
         if attributes_tree_branch:
             where_parts.append(f"AND TREE_BRANCH = '{attributes_tree_branch}'")
+        if attributes_department_id:
+            where_parts.append(f"AND DEPARTMENT_ID = '{attributes_department_id}'")
         
         root_where = "\n".join(where_parts)
     else:
@@ -182,6 +197,7 @@ FROM ({base_sql}) cte{where_clause}"""
        USERNAME,
           JOB_CODE,
        JOB_TITLE,
+        DEPARTMENT_ID,
        BU_CODE,
        COMPANY,
        TREE_BRANCH,
@@ -198,6 +214,7 @@ AND status_code != 'T'{connect_by_exclude}""")
        USERNAME,
         JOB_CODE,
        JOB_TITLE,
+        DEPARTMENT_ID,
        BU_CODE,
        COMPANY,
        TREE_BRANCH,
@@ -217,6 +234,10 @@ AND status_code != 'T'{f" AND USERNAME <> '{person_username}'" if mode=='by_pers
     if filter_bu_codes:
         bu_codes_csv = ",".join([f"'{bc}'" for bc in filter_bu_codes])
         filter_where_parts.append(f"cte.BU_CODE IN ({bu_codes_csv})")
+
+    if filter_department_ids:
+        department_ids_csv = ",".join([f"'{d}'" for d in filter_department_ids])
+        filter_where_parts.append(f"cte.DEPARTMENT_ID IN ({department_ids_csv})")
     
     if filter_companies:
         companies_csv = ",".join([f"'{c}'" for c in filter_companies])

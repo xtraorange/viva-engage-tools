@@ -45,7 +45,7 @@ def init_api_routes(app, base_path: str):
 
             where_clause = " OR ".join(conds)
             sql = f"""
-            SELECT EMPLOYEE_ID, FIRST_NAME, LAST_NAME, USERNAME FROM omsadm.employee_mv
+            SELECT EMPLOYEE_ID, FIRST_NAME, LAST_NAME, USERNAME, JOB_TITLE FROM omsadm.employee_mv
             WHERE ({where_clause})
             AND status_code != 'T'
             ORDER BY FIRST_NAME, LAST_NAME
@@ -61,6 +61,7 @@ def init_api_routes(app, base_path: str):
                         "first_name": row.get("FIRST_NAME") or row.get("first_name"),
                         "last_name": row.get("LAST_NAME") or row.get("last_name"),
                         "username": row.get("USERNAME") or row.get("username"),
+                        "job_title": row.get("JOB_TITLE") or row.get("job_title"),
                     })
                 else:
                     items.append({
@@ -68,6 +69,7 @@ def init_api_routes(app, base_path: str):
                         "first_name": row[1],
                         "last_name": row[2],
                         "username": row[3],
+                        "job_title": row[4],
                     })
             executor.close()
             return jsonify(items)
@@ -96,7 +98,8 @@ def init_api_routes(app, base_path: str):
             "job_title": "JOB_TITLE",
             "bu_code": "BU_CODE", 
             "company": "COMPANY",
-            "tree_branch": "TREE_BRANCH"
+            "tree_branch": "TREE_BRANCH",
+            "department_id": "DEPARTMENT_ID",
         }
         
         if field not in field_map:
@@ -129,7 +132,8 @@ def init_api_routes(app, base_path: str):
             "job_title": "JOB_TITLE",
             "bu_code": "BU_CODE",
             "company": "COMPANY", 
-            "tree_branch": "TREE_BRANCH"
+            "tree_branch": "TREE_BRANCH",
+            "department_id": "DEPARTMENT_ID",
         }
         
         if field not in field_map:
@@ -152,6 +156,74 @@ def init_api_routes(app, base_path: str):
                 else:
                     value = row[0]
                 items.append({"value": value})
+            executor.close()
+            return jsonify(items)
+        except Exception as e:
+            return jsonify({"error": str(e)}), 500
+
+    @api_bp.route("/api/preview-role-roots", methods=["GET"])
+    def preview_role_roots():
+        """Preview employees selected as hierarchy roots in By Role mode."""
+        cfg = config_service.load_general_config()
+        job_title = request.args.get("job_title", "").strip()
+        bu_code = request.args.get("bu_code", "").strip()
+        company = request.args.get("company", "").strip()
+        tree_branch = request.args.get("tree_branch", "").strip()
+        department_id = request.args.get("department_id", "").strip()
+
+        job_title = job_title.replace("'", "''")
+        bu_code = bu_code.replace("'", "''")
+        company = company.replace("'", "''")
+        tree_branch = tree_branch.replace("'", "''")
+        department_id = department_id.replace("'", "''")
+
+        # Require at least one attribute to avoid huge unfiltered queries.
+        if not (job_title or bu_code or company or tree_branch or department_id):
+            return jsonify([])
+
+        where_parts = ["status_code != 'T'"]
+        if job_title:
+            # Input is displayed as "CODE - TITLE"; filter roots by code.
+            job_code = job_title.split(" - ", 1)[0].strip()
+            where_parts.append(f"JOB_CODE = '{job_code}'")
+        if bu_code:
+            where_parts.append(f"BU_CODE = '{bu_code}'")
+        if company:
+            where_parts.append(f"COMPANY = '{company}'")
+        if tree_branch:
+            where_parts.append(f"TREE_BRANCH = '{tree_branch}'")
+        if department_id:
+            where_parts.append(f"DEPARTMENT_ID = '{department_id}'")
+
+        sql = f"""
+        SELECT EMPLOYEE_ID, FIRST_NAME, LAST_NAME, USERNAME, JOB_TITLE
+        FROM omsadm.employee_mv
+        WHERE {' AND '.join(where_parts)}
+        ORDER BY FIRST_NAME, LAST_NAME
+        FETCH FIRST 25 ROWS ONLY
+        """
+
+        try:
+            executor = DatabaseExecutor(cfg.get("oracle_tns"))
+            results = executor.run_query(sql)
+            items = []
+            for row in results:
+                if isinstance(row, dict):
+                    items.append({
+                        "id": row.get("EMPLOYEE_ID") or row.get("employee_id"),
+                        "first_name": row.get("FIRST_NAME") or row.get("first_name"),
+                        "last_name": row.get("LAST_NAME") or row.get("last_name"),
+                        "username": row.get("USERNAME") or row.get("username"),
+                        "job_title": row.get("JOB_TITLE") or row.get("job_title"),
+                    })
+                else:
+                    items.append({
+                        "id": row[0],
+                        "first_name": row[1],
+                        "last_name": row[2],
+                        "username": row[3],
+                        "job_title": row[4],
+                    })
             executor.close()
             return jsonify(items)
         except Exception as e:

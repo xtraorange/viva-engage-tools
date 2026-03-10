@@ -52,13 +52,36 @@
 </form>
 
 <script>
+  const draftKey = 'group_new_draft';
+
+  function collectDraft() {
+    return {
+      handle: document.getElementById('handle').value,
+      display_name: document.getElementById('display_name').value,
+      tags: document.getElementById('tags').value,
+      email_recipient: document.getElementById('email_recipient').value,
+      query: document.getElementById('query').value,
+    };
+  }
+
+  function restoreDraft() {
+    const raw = sessionStorage.getItem(draftKey);
+    if (!raw) return;
+    try {
+      const draft = JSON.parse(raw);
+      if (typeof draft.handle === 'string') document.getElementById('handle').value = draft.handle;
+      if (typeof draft.display_name === 'string') document.getElementById('display_name').value = draft.display_name;
+      if (typeof draft.tags === 'string') document.getElementById('tags').value = draft.tags;
+      if (typeof draft.email_recipient === 'string') document.getElementById('email_recipient').value = draft.email_recipient;
+      if (typeof draft.query === 'string') document.getElementById('query').value = draft.query;
+    } catch (_) {
+      // Ignore malformed session data.
+    }
+  }
+
   document.getElementById('btn-use-builder').addEventListener('click', (e) => {
     e.preventDefault();
-    // Save current query to sessionStorage if user has one
-    const currentQuery = document.getElementById('query').value;
-    if (currentQuery && currentQuery !== 'SELECT * FROM dual;') {
-      sessionStorage.setItem('previous_query', currentQuery);
-    }
+    sessionStorage.setItem(draftKey, JSON.stringify(collectDraft()));
     // Redirect to query builder with return path
     sessionStorage.setItem('return_to', window.location.pathname);
     window.location.href = '/query-builder';
@@ -66,11 +89,16 @@
 
   // Check if returning from query builder
   window.addEventListener('load', () => {
+    restoreDraft();
     const acceptedQuery = sessionStorage.getItem('accepted_query_sql');
     if (acceptedQuery) {
       document.getElementById('query').value = acceptedQuery;
       sessionStorage.removeItem('accepted_query_sql');
     }
+  });
+
+  document.querySelector('form').addEventListener('submit', () => {
+    sessionStorage.removeItem(draftKey);
   });
 </script>
 {% endblock %}
