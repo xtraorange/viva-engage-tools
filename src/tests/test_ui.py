@@ -309,7 +309,8 @@ def test_group_edit_hides_builder_summary_when_override_exists(client, app_works
     assert rv.status_code == 200
     assert b"Override SQL is active" in rv.data
     assert b"Remove Override SQL Script" in rv.data
-    assert b'id="builder-summary"' not in rv.data
+    assert b'id="builder-panel" style="display: none;"' in rv.data
+    assert b'id="override-panel"' in rv.data
 
 
 def test_group_edit_renders_saved_builder_summary_without_navigation(client, app_workspace):
@@ -322,7 +323,16 @@ def test_group_edit_renders_saved_builder_summary_without_navigation(client, app
 
     rv = client.get("/group/summary_group")
     assert rv.status_code == 200
-    assert b"attributes_job_code" in rv.data
+    assert b"Builder Method and Parameters" in rv.data
+    assert b"Edit SQL Manually (Override)" in rv.data
+    assert b'id="override-panel" style="display: none;"' in rv.data
+
+
+def test_group_new_hides_override_editor_by_default(client):
+    rv = client.get("/group/new")
+    assert rv.status_code == 200
+    assert b"Edit SQL Manually (Override)" in rv.data
+    assert b'id="override-panel" style="display: none;"' in rv.data
 
 
 def test_find_available_port_chooses_fallback_when_preferred_in_use():

@@ -268,3 +268,12 @@ repository_url: "https://github.com/xtraorange/jampy-engage"
 4. Optional: Create a GitHub release tag and add release notes for additional visibility
 
 The update checker reads this file directly from GitHub, so changes are detected immediately without any caching delays or release marking requirements.
+
+
+TODO:
+ - The override message box on group edit is still formatted where it has a lot of top padding or a couple extra lines before the actual message.  This just appears strange.
+ - I think we could make the formatting for the parameters on the group edit page much nicer looking.  Instead of being inside a monospace box, lets just give it a UI element box (not a text box) and then use tags for each parameter like we do on the sql builder page.
+ - Let's unify the look of the UI to be the same as the SQL Query Builder look... the boxes and headers within the top of the boxes, etc.  Obviously this will need to be adapted from page to page, it won't always make sense... but let's try for consistency in the look.  It looks nicer than any of the other pages.  Let's also use a unified color scheme (not the colors on the sql builder page) based on a popular simple color scheme (you pick, nothing outlandish).  I also wouldn't mind if we found a popular pre-themed dashboard for our css library (like the material dashboard) and used it's style.
+ - Purely for fun, I'd like to track statistics on everything in the app and have our landing page be a dashboard with some nice graphs and such (using the template mentioned previously).  We should have a way to reset the stats so that when I'm done testing I can reset everything (probably on the settings page).  We should track generation times, reports generated, which report has the most generations, etc.  Please come up with some interesting things to track. Even just how many reports are available.
+ - Please update the tests and the documentation, run the tests, and correct any issues.
+ - Please suggest other features that might be helpful given the general purposes of this app!

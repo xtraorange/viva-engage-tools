@@ -242,12 +242,13 @@
   }
 
   function activateModeTab(mode) {
+    currentMode = mode === 'by_attributes' ? 'by_role' : mode;
     const tabMap = {
       by_person: 'by-person-tab',
       by_role: 'by-role-tab',
       all_employees: 'all-employees-tab'
     };
-    const tabId = tabMap[mode] || 'by-person-tab';
+    const tabId = tabMap[currentMode] || 'by-person-tab';
     const tabButton = document.getElementById(tabId);
     if (window.bootstrap && window.bootstrap.Tab && tabButton) {
       window.bootstrap.Tab.getOrCreateInstance(tabButton).show();

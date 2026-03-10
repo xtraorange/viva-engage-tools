@@ -43,39 +43,47 @@
         <legend class="mb-3">Query Configuration</legend>
         <input type="hidden" id="query_builder_json" name="query_builder_json" value='{{ config.query_builder_json | e }}'>
 
-        {% if config.has_override_query %}
-        <div class="alert alert-warning py-2">
-          Override SQL is active. This script is used at runtime until removed.
+        <div id="builder-panel" {% if config.has_override_query %}style="display: none;"{% endif %}>
+          <div class="mb-3">
+            <label class="form-label">Builder Method and Parameters</label>
+            <pre id="builder-summary" class="form-control" style="min-height: 140px; white-space: pre-wrap;">No query builder parameters selected yet.</pre>
+            <button type="button" class="btn btn-sm btn-outline-primary mt-2" id="btn-use-builder">
+              🔨 Use Query Builder
+            </button>
+            <button type="button" class="btn btn-sm btn-outline-warning mt-2 ms-2" id="btn-enable-override">
+              Edit SQL Manually (Override)
+            </button>
+          </div>
         </div>
-        {% endif %}
 
-        {% if config.has_override_query %}
-        <div class="mb-3">
-          <button
-            type="submit"
-            class="btn btn-sm btn-outline-danger"
-            formmethod="post"
-            formaction="{{ url_for('groups.remove_override', handle=group.handle) }}"
-            formnovalidate
-            onclick="return confirm('Remove custom SQL override and use saved builder parameters?');"
-          >
-            Remove Override SQL Script
-          </button>
-        </div>
-        {% else %}
-        <div class="mb-3">
-          <label class="form-label">Builder Method and Parameters</label>
-          <pre id="builder-summary" class="form-control" style="min-height: 140px; white-space: pre-wrap;">No query builder parameters selected yet.</pre>
-          <button type="button" class="btn btn-sm btn-outline-primary mt-2" id="btn-use-builder">
-            🔨 Use Query Builder
-          </button>
-        </div>
-        {% endif %}
+        <div id="override-panel" {% if not config.has_override_query %}style="display: none;"{% endif %}>
+          <div class="alert alert-warning py-2 mb-2 mt-0 border-0">
+            Override SQL is active. This script is used at runtime until removed.
+          </div>
 
-        <div class="mb-3">
-          <label for="query" class="form-label">Override SQL Script</label>
-          <textarea class="form-control font-monospace" id="query" name="query" rows="10" style="font-size: 0.9rem;" placeholder="Leave blank to use Query Builder parameters at report time.">{{ config.override_query }}</textarea>
-          <small class="form-text text-muted">If provided, this override script is used instead of generated SQL.</small>
+          <div class="mb-2">
+            {% if config.has_override_query %}
+            <button
+              type="submit"
+              class="btn btn-sm btn-outline-danger"
+              formmethod="post"
+              formaction="{{ url_for('groups.remove_override', handle=group.handle) }}"
+              formnovalidate
+              onclick="return confirm('Remove custom SQL override and use saved builder parameters?');"
+            >
+              Remove Override SQL Script
+            </button>
+            {% endif %}
+            <button type="button" class="btn btn-sm btn-outline-secondary {% if config.has_override_query %}d-none{% endif %}" id="btn-cancel-override">
+              Back to Query Builder Parameters
+            </button>
+          </div>
+
+          <div class="mb-3">
+            <label for="query" class="form-label">Override SQL Script</label>
+            <textarea class="form-control font-monospace" id="query" name="query" rows="10" style="font-size: 0.9rem;" placeholder="Leave blank to use Query Builder parameters at report time.">{{ config.override_query }}</textarea>
+            <small class="form-text text-muted">If provided, this override script is used instead of generated SQL.</small>
+          </div>
         </div>
       </fieldset>
     </div>
@@ -88,6 +96,97 @@
 
 <script>
   const draftKey = `group_edit_draft:${window.location.pathname}`;
+  const hasSavedOverride = {{ 'true' if config.has_override_query else 'false' }};
+
+  function formatBuilderSummary(params) {
+    if (!params || typeof params !== 'object') {
+      return 'No query builder parameters selected yet.';
+    }
+
+    const mode = params.mode || 'by_person';
+    const lines = [];
+    lines.push('Population');
+
+    if (mode === 'all_employees') {
+      lines.push('- All active employees');
+    } else if (mode === 'by_role' || mode === 'by_attributes') {
+      lines.push('- Hierarchy by role attributes');
+      const roleDetails = [];
+      const jobDisplay = params.attributes_job_title_display
+        || [params.attributes_job_code, params.attributes_job_title_text || params.attributes_job_title].filter(Boolean).join(' - ');
+      if (jobDisplay) roleDetails.push(`  Job Title/Code: ${jobDisplay}`);
+      if (params.attributes_bu_code) roleDetails.push(`  Business Unit: ${params.attributes_bu_code}`);
+      if (params.attributes_company) roleDetails.push(`  Company: ${params.attributes_company}`);
+      if (params.attributes_tree_branch) roleDetails.push(`  Tree Branch: ${params.attributes_tree_branch}`);
+      if (params.attributes_department_id) roleDetails.push(`  Department ID: ${params.attributes_department_id}`);
+      if (roleDetails.length === 0) {
+        roleDetails.push('  (no role attributes selected)');
+      }
+      lines.push(...roleDetails);
+    } else {
+      lines.push('- Hierarchy by person');
+      const selected = Array.isArray(params.selected_person_details) ? params.selected_person_details : [];
+      if (selected.length > 0) {
+        selected.forEach(p => {
+          const parts = [
+            [p.first_name, p.last_name].filter(Boolean).join(' ').trim(),
+            p.username ? `(${p.username})` : '',
+            p.id ? `[${p.id}]` : ''
+          ].filter(Boolean);
+          lines.push(`  ${parts.join(' ')}`);
+        });
+      } else if (params.person_id || params.person_username) {
+        lines.push(`  ${params.person_username || ''} ${params.person_id ? `[${params.person_id}]` : ''}`.trim());
+      } else {
+        lines.push('  (no person selected)');
+      }
+      if (params.exclude_root) {
+        lines.push('  Excluding selected root person(s) from output');
+      }
+    }
+
+    lines.push('');
+    lines.push('Filters');
+    const filterRows = [];
+    const filterJobs = Array.isArray(params.filter_job_titles_display) && params.filter_job_titles_display.length > 0
+      ? params.filter_job_titles_display
+      : (params.filter_job_titles || params.filter_job_codes || []);
+    if (Array.isArray(filterJobs) && filterJobs.length > 0) filterRows.push(`- Job Title/Code: ${filterJobs.join(', ')}`);
+    if (Array.isArray(params.filter_bu_codes) && params.filter_bu_codes.length > 0) filterRows.push(`- Business Unit: ${params.filter_bu_codes.join(', ')}`);
+    if (Array.isArray(params.filter_companies) && params.filter_companies.length > 0) filterRows.push(`- Company: ${params.filter_companies.join(', ')}`);
+    if (Array.isArray(params.filter_tree_branches) && params.filter_tree_branches.length > 0) filterRows.push(`- Tree Branch: ${params.filter_tree_branches.join(', ')}`);
+    if (Array.isArray(params.filter_department_ids) && params.filter_department_ids.length > 0) filterRows.push(`- Department ID: ${params.filter_department_ids.join(', ')}`);
+    if (params.filter_full_part_time) filterRows.push(`- Full/Part Time: ${params.filter_full_part_time}`);
+
+    if (filterRows.length === 0) {
+      lines.push('- None (all records from population)');
+    } else {
+      lines.push(...filterRows);
+    }
+
+    return lines.join('\n');
+  }
+
+  function setOverrideMode(enabled) {
+    const builderPanel = document.getElementById('builder-panel');
+    const overridePanel = document.getElementById('override-panel');
+    const cancelOverrideBtn = document.getElementById('btn-cancel-override');
+    const queryInput = document.getElementById('query');
+
+    if (enabled) {
+      builderPanel.style.display = 'none';
+      overridePanel.style.display = '';
+      if (cancelOverrideBtn && hasSavedOverride) {
+        cancelOverrideBtn.classList.add('d-none');
+      }
+    } else {
+      if (!hasSavedOverride) {
+        queryInput.value = '';
+      }
+      builderPanel.style.display = '';
+      overridePanel.style.display = 'none';
+    }
+  }
 
   function collectDraft() {
     return {
@@ -112,7 +211,7 @@
     }
     try {
       const params = JSON.parse(raw);
-      summary.textContent = JSON.stringify(params, null, 2);
+      summary.textContent = formatBuilderSummary(params);
     } catch (_) {
       summary.textContent = 'Unable to read builder parameters.';
     }
@@ -156,8 +255,22 @@
     window.location.href = '/query-builder';
   });
 
+  document.getElementById('btn-enable-override').addEventListener('click', (e) => {
+    e.preventDefault();
+    setOverrideMode(true);
+  });
+
+  const cancelOverrideBtn = document.getElementById('btn-cancel-override');
+  if (cancelOverrideBtn) {
+    cancelOverrideBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      setOverrideMode(false);
+    });
+  }
+
   // Check if returning from query builder
   window.addEventListener('load', () => {
+    setOverrideMode(hasSavedOverride);
     restoreDraft();
     updateBuilderSummary();
     const acceptedBuilderParams = sessionStorage.getItem('accepted_query_builder_params');
@@ -169,6 +282,7 @@
     const acceptedOverrideQuery = sessionStorage.getItem('accepted_query_sql');
     if (acceptedOverrideQuery) {
       document.getElementById('query').value = acceptedOverrideQuery;
+      setOverrideMode(true);
       sessionStorage.removeItem('accepted_query_sql');
     }
   });
