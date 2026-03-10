@@ -86,10 +86,11 @@
             <div class="card border-light bg-light mt-3">
               <div class="card-body py-2">
                 <div class="d-flex justify-content-between align-items-center mb-2">
-                  <strong class="small text-uppercase text-muted">Current Root Matches</strong>
+                  <strong class="small text-uppercase text-muted">Current Hierarchy Leader Matches</strong>
                   <span id="role-preview-count" class="badge bg-secondary">0</span>
                 </div>
-                <div id="role-preview-list" class="small text-muted">Add at least one condition to preview matching employees.</div>
+                <button id="toggle-role-preview" type="button" class="btn btn-sm btn-outline-secondary mb-2">Show Matches</button>
+                <div id="role-preview-list" class="small text-muted" style="display: none;">Add at least one condition to preview matching employees.</div>
               </div>
             </div>
           </div>
@@ -159,6 +160,7 @@
   </div>
 
   <div class="col-lg-4">
+    <div class="sticky-sql-panel">
     <!-- SQL Preview -->
     <div class="card mb-3">
       <div class="card-header">
@@ -192,6 +194,7 @@
         </button>
       </div>
     </div>
+    </div>
   </div>
 </div>
 
@@ -203,6 +206,11 @@
   }
   #person-suggestions .list-group-item:hover {
     background-color: #e7f1ff;
+  }
+
+  .sticky-sql-panel {
+    position: sticky;
+    top: 12px;
   }
 </style>
 
@@ -224,6 +232,8 @@
   };
 
   let shownDbErrorBanner = false;
+  let rolePreviewExpanded = false;
+  let rolePreviewRoots = [];
 
   function showDbErrorBanner(message) {
     if (shownDbErrorBanner) {
@@ -233,6 +243,14 @@
     banner.textContent = `Database connection issue: ${message}`;
     banner.style.display = 'block';
     shownDbErrorBanner = true;
+  }
+
+  function setRolePreviewExpanded(expanded) {
+    rolePreviewExpanded = expanded;
+    const btn = document.getElementById('toggle-role-preview');
+    const list = document.getElementById('role-preview-list');
+    btn.textContent = expanded ? 'Hide Matches' : 'Show Matches';
+    list.style.display = expanded ? 'block' : 'none';
   }
 
   // Tag management functions
@@ -337,6 +355,10 @@
   document.getElementById('all-employees-tab').addEventListener('click', () => {
     currentMode = 'all_employees';
     updateSQL();
+  });
+
+  document.getElementById('toggle-role-preview').addEventListener('click', () => {
+    setRolePreviewExpanded(!rolePreviewExpanded);
   });
 
   // Typeahead function (configurable cache vs live)
@@ -583,6 +605,7 @@
     });
 
     if (![...params.values()].some(v => v)) {
+      rolePreviewRoots = [];
       count.textContent = '0';
       list.className = 'small text-muted';
       list.textContent = 'Add at least one condition to preview matching employees.';
@@ -593,12 +616,21 @@
       const response = await fetch(`/api/preview-role-roots?${params.toString()}`);
       const employees = await response.json();
       if (employees && employees.error) {
+        rolePreviewRoots = [];
         showDbErrorBanner(employees.error);
         count.textContent = '0';
         list.className = 'small text-danger';
         list.textContent = 'Unable to load preview.';
         return;
       }
+
+      rolePreviewRoots = Array.isArray(employees)
+        ? employees.map(emp => ({
+            first_name: emp.first_name,
+            last_name: emp.last_name,
+            job_title: emp.job_title || '',
+          }))
+        : [];
 
       count.textContent = String(employees.length || 0);
       if (!Array.isArray(employees) || employees.length === 0) {
@@ -615,6 +647,7 @@
         </div>
       `).join('');
     } catch (error) {
+      rolePreviewRoots = [];
       showDbErrorBanner(error);
       count.textContent = '0';
       list.className = 'small text-danger';
@@ -646,6 +679,11 @@
           person_id: p.id,
           person_username: p.username
         })),
+        root_people: selectedPersons.map(p => ({
+          first_name: p.first_name,
+          last_name: p.last_name,
+          job_title: p.job_title || ''
+        })),
         exclude_root: document.getElementById('person-exclude-root').checked,
       };
     } else if (currentMode === 'by_attributes') {
@@ -672,6 +710,7 @@
         attributes_company: company || null,
         attributes_tree_branch: branch || null,
         attributes_department_id: departmentId || null,
+        root_people: rolePreviewRoots,
       };
     } else if (currentMode === 'all_employees') {
       mode = 'all_employees';

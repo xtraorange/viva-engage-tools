@@ -12,6 +12,7 @@ def _extract_job_code(value: str) -> str:
 def generate_hierarchy_sql(
     mode: str,  # "by_person" or "by_attributes" or "all_employees"
     persons: list = None,  # list of {person_id, person_username} dicts
+    root_people: list = None,  # optional list of {first_name,last_name,job_title} for root comment
     person_id: str = None,  # deprecated: single person
     person_first_name: str = None,
     person_last_name: str = None,
@@ -159,17 +160,19 @@ FROM ({base_sql}) cte{where_clause}"""
     else:
         raise ValueError("mode must be 'by_person', 'by_attributes', or 'all_employees'")
     
-    # Build a friendly comment indicating the root employee(s) (if known)
-    comment = ''
-    if mode == 'by_person' and persons:
-        person_strs = []
-        for person in persons:
-            if person.get('person_username'):
-                person_strs.append(f"username={person.get('person_username')}")
-            elif person.get('person_id'):
-                person_strs.append(f"id={person.get('person_id')}")
-        if person_strs:
-            comment = "-- hierarchy roots: " + " / ".join(person_strs) + "\n"
+    # Build a friendly comment indicating root employee(s) by name and title.
+    comment = ""
+    if root_people:
+        root_labels = []
+        for person in root_people:
+            first = (person.get("first_name") or "").strip()
+            last = (person.get("last_name") or "").strip()
+            name = f"{first} {last}".strip()
+            title = (person.get("job_title") or "No title").strip()
+            if name:
+                root_labels.append(f"{name} - {title}")
+        if root_labels:
+            comment = "-- roots: " + " / ".join(root_labels) + "\n"
 
     # Build the hierarchy using Oracle CONNECT BY syntax for each person
     hierarchy_parts = []
@@ -207,10 +210,10 @@ START WITH {person_where}
 CONNECT BY PRIOR EMPLOYEE_ID = SUPERVISOR_ID
 AND status_code != 'T'{connect_by_exclude}""")
         
-        hierarchy_sql = comment + "\nUNION ALL\n".join(hierarchy_parts)
+        hierarchy_sql = "\nUNION ALL\n".join(hierarchy_parts)
     else:
         # Single person or by_attributes
-        hierarchy_sql = comment + f"""SELECT EMPLOYEE_ID,
+        hierarchy_sql = f"""SELECT EMPLOYEE_ID,
        USERNAME,
         JOB_CODE,
        JOB_TITLE,
@@ -220,7 +223,7 @@ AND status_code != 'T'{connect_by_exclude}""")
        TREE_BRANCH,
        FULL_PART_TIME
 FROM omsadm.employee_mv
-START WITH {root_where.replace("status_code != 'T' AND ", "").replace("status_code != 'T'", "1=1")}
+    START WITH {root_where}
 CONNECT BY PRIOR EMPLOYEE_ID = SUPERVISOR_ID
 AND status_code != 'T'{f" AND USERNAME <> '{person_username}'" if mode=='by_person' and person_username else (f" AND EMPLOYEE_ID <> '{person_id}'" if mode=='by_person' and person_id else '')}"""
     
@@ -263,7 +266,7 @@ AND status_code != 'T'{f" AND USERNAME <> '{person_username}'" if mode=='by_pers
     if filter_where_parts:
         where_clause = "\nWHERE " + "\n  AND ".join(filter_where_parts)
     
-    final_query = f"""SELECT cte.*
+    final_query = f"""{comment}SELECT cte.USERNAME
 FROM ({hierarchy_sql}) cte{where_clause}"""
     
     return final_query
