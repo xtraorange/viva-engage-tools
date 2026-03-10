@@ -321,6 +321,21 @@
     updateSQL();
   }
 
+  function parseJobDisplay(value) {
+    if (typeof value !== 'string') {
+      return { code: '', title: '' };
+    }
+    const trimmed = value.trim();
+    if (!trimmed) {
+      return { code: '', title: '' };
+    }
+    const parts = trimmed.split(' - ', 2);
+    return {
+      code: (parts[0] || '').trim(),
+      title: (parts[1] || '').trim(),
+    };
+  }
+
   let currentSQL = '';
   let currentBuilderParams = null;
 
@@ -369,7 +384,6 @@
   let attrSearchTimer = null;
 
   attrFields.forEach(fieldId => {
-    console.log('Setting up attribute search for', fieldId);
     const input = document.getElementById(fieldId);
     const suggestionsDiv = document.getElementById(fieldId + '-suggestions');
     const field = fieldMap[fieldId];
@@ -384,7 +398,6 @@
     }
 
     input.addEventListener('input', (e) => {
-      console.log('Attribute input on', fieldId, 'query:', e.target.value.trim());
       const query = e.target.value.trim();
       if (query.length < 2) {
         suggestionsDiv.style.display = 'none';
@@ -394,10 +407,8 @@
       clearTimeout(attrSearchTimer);
       attrSearchTimer = setTimeout(async () => {
         try {
-          console.log('Fetching /api/search-values?field=' + field + '&q=' + query);
           const response = await fetch(`/api/search-values?field=${field}&q=${encodeURIComponent(query)}`);
           const data = await response.json();
-          console.log('Attribute search response:', data);
 
           if (data && data.error) {
             showDbErrorBanner(data.error);
@@ -451,7 +462,6 @@
   let filterSearchTimer = null;
 
   filterFields.forEach(fieldId => {
-    console.log('Setting up filter search for', fieldId);
     const input = document.getElementById(fieldId);
     const suggestionsDiv = document.getElementById(fieldId + '-suggestions');
     const field = filterFieldMap[fieldId];
@@ -466,7 +476,6 @@
     }
 
     input.addEventListener('input', (e) => {
-      console.log('Filter input on', fieldId, 'value:', e.target.value);
       const query = e.target.value.trim();
       if (query.length < 2) {
         suggestionsDiv.style.display = 'none';
@@ -476,10 +485,8 @@
       clearTimeout(filterSearchTimer);
       filterSearchTimer = setTimeout(async () => {
         try {
-          console.log('Fetching /api/search-values?field=' + field + '&q=' + query);
           const response = await fetch(`/api/search-values?field=${field}&q=${encodeURIComponent(query)}`);
           const data = await response.json();
-          console.log('Filter search response:', data);
 
           if (data && data.error) {
             showDbErrorBanner(data.error);
@@ -599,7 +606,7 @@
     const list = document.getElementById('role-preview-list');
     const count = document.getElementById('role-preview-count');
     const params = new URLSearchParams({
-      job_title: fieldTags['attr-job-title'][0] || '',
+      job_title: parseJobDisplay(fieldTags['attr-job-title'][0] || '').code,
       bu_code: fieldTags['attr-bu-code'][0] || '',
       company: fieldTags['attr-company'][0] || '',
       tree_branch: fieldTags['attr-tree-branch'][0] || '',
@@ -693,8 +700,9 @@
     } else if (currentMode === 'by_role') {
       mode = 'by_role';
       const jobTitle = fieldTags['attr-job-title'][0] || '';
-      const jobCode = jobTitle && jobTitle.includes(' - ') ? jobTitle.split(' - ', 1)[0].trim() : jobTitle;
-      const jobTitleText = jobTitle && jobTitle.includes(' - ') ? jobTitle.split(' - ', 1)[1].trim() : '';
+      const parsedJob = parseJobDisplay(jobTitle);
+      const jobCode = parsedJob.code;
+      const jobTitleText = parsedJob.title;
       const buCode = fieldTags['attr-bu-code'][0] || '';
       const company = fieldTags['attr-company'][0] || '';
       const branch = fieldTags['attr-tree-branch'][0] || '';
@@ -727,7 +735,9 @@
     // Add filters from tag fields
     const filterJobDisplays = fieldTags['filter-job-titles'] || [];
     payload.filter_job_titles = filterJobDisplays;
-    payload.filter_job_codes = filterJobDisplays.map(v => (v && v.includes(' - ') ? v.split(' - ', 1)[0].trim() : v));
+    payload.filter_job_codes = filterJobDisplays
+      .map(v => parseJobDisplay(v).code)
+      .filter(v => !!v);
     payload.filter_job_titles_display = filterJobDisplays;
     payload.filter_bu_codes = fieldTags['filter-bu-codes'] || [];
     payload.filter_companies = fieldTags['filter-companies'] || [];

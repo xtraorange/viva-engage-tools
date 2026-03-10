@@ -1,6 +1,7 @@
 import pytest
 import os
 from datetime import datetime, timedelta
+import time
 from src.ui import create_app
 
 
@@ -26,10 +27,42 @@ def client():
     return TEST_APP.test_client()
 
 
+def wait_for_update_to_finish(client, timeout_seconds=5):
+    start = time.time()
+    while True:
+        status = client.get('/api/update-status').get_json()
+        if not status['updating']:
+            return status
+        if time.time() - start > timeout_seconds:
+            pytest.fail('Timed out waiting for update status to clear')
+        time.sleep(0.05)
+
+
 def test_index_page(client):
     rv = client.get('/settings')
     assert rv.status_code == 200
     assert b'General Settings' in rv.data
+
+
+def test_settings_can_save_ui_port(client):
+    general_path = os.path.join(os.getcwd(), "config", "general.yaml")
+    original = None
+    if os.path.exists(general_path):
+        with open(general_path, "r", encoding="utf-8") as f:
+            original = f.read()
+
+    try:
+        rv = client.post('/settings', data={
+            'ui_port': '5055',
+            'output_dir': './output',
+            'email_method': 'smtp',
+        }, follow_redirects=True)
+        assert rv.status_code == 200
+        assert b'General Settings' in rv.data
+    finally:
+        if original is not None:
+            with open(general_path, "w", encoding="utf-8") as f:
+                f.write(original)
 
 
 def test_generate_page(client):
@@ -120,12 +153,7 @@ def test_update_stashes_changes(monkeypatch, client):
     rv = client.post('/update')
     assert rv.status_code == 302
     # wait until updating flag clears
-    import time
-    while True:
-        status = client.get('/api/update-status').get_json()
-        if not status['updating']:
-            break
-        time.sleep(0.1)
+    status = wait_for_update_to_finish(client)
     # ensure stash/pull/pop commands invoked
     assert ['git', 'stash', 'push', '-u', '-m', 'jampy-update'] in calls
     assert ['git', 'pull', '--ff-only'] in calls
@@ -148,12 +176,7 @@ def test_force_update_endpoint(monkeypatch, client):
     rv = client.post('/force-update')
     assert rv.status_code == 302  # Should redirect
     # wait until updating flag clears
-    import time
-    while True:
-        status = client.get('/api/update-status').get_json()
-        if not status['updating']:
-            break
-        time.sleep(0.1)
+    status = wait_for_update_to_finish(client)
     # ensure stash/pull/pop commands invoked (same as normal update)
     assert ['git', 'stash', 'push', '-u', '-m', 'jampy-update'] in calls
     assert ['git', 'pull', '--ff-only'] in calls
@@ -219,6 +242,18 @@ def test_query_builder_routes(client):
         sql = response.get_json().get("sql", "")
         assert "BU_CODE" in sql
         assert "JOB_TITLE" in sql
+
+    # Regression: persons can come from saved payload as string list.
+    response = client.post("/api/generate-builder-sql", json={
+        "mode": "by_person",
+        "persons": ["gwilson"],
+        "attributes_bu_code": "IGNORED_FOR_BY_PERSON"
+    })
+    assert response.status_code in [200, 400]
+    if response.status_code == 200:
+        sql = response.get_json().get("sql", "")
+        assert "gwilson" in sql
+        assert "IGNORED_FOR_BY_PERSON" not in sql
 
     # Test query testing
     response = client.post("/api/test-query", json={

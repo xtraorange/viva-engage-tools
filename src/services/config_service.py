@@ -18,10 +18,12 @@ class ConfigService:
             "max_workers": None,
             "email_method": "smtp",
             "outlook_auto_send": False,
+            "ui_port": 5000,
         })
 
     def save_general_config(self, config: Dict[str, Any]) -> None:
         """Save general configuration."""
+        os.makedirs(os.path.dirname(self.config_path), exist_ok=True)
         with open(self.config_path, "w", encoding="utf-8") as f:
             yaml.safe_dump(config, f)
 
@@ -53,6 +55,7 @@ class ConfigService:
         filename = "email_template_override.yaml" if template_type == "override" else "email_template.yaml"
         path = os.path.join(self.base_path, "config", filename)
 
+        os.makedirs(os.path.dirname(path), exist_ok=True)
         with open(path, "w", encoding="utf-8") as f:
             yaml.safe_dump(config, f)
 

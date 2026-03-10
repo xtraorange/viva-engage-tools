@@ -39,9 +39,13 @@ def test_discover_and_list(tmp_path, capsys):
     cfg_dir.mkdir()
     (cfg_dir / "general.yaml").write_text("oracle_tns: dummy\n")
     sys.argv = ["", "list"]
+    cwd = os.getcwd()
     os.chdir(str(base))
-    with pytest.raises(SystemExit) as exc:
-        generate_reports.main()
+    try:
+        with pytest.raises(SystemExit) as exc:
+            generate_reports.main()
+    finally:
+        os.chdir(cwd)
     assert exc.value.code == 0
     captured = capsys.readouterr()
     assert "g1" in captured.out
@@ -100,7 +104,8 @@ def test_root_entrypoint(monkeypatch, tmp_path):
     cfg_dir.mkdir()
     (cfg_dir / "general.yaml").write_text("oracle_tns: dummy\n")
     # determine actual script path via import rather than assuming cwd
-    from .. import run_reports as rr
+    import importlib
+    rr = importlib.import_module("run_reports")
     script = rr.__file__
 
     cwd = os.getcwd()

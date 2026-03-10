@@ -179,3 +179,11 @@ cython_debug/
 #  refer to https://docs.cursor.com/context/ignore-files
 .cursorignore
 .cursorindexingignore
+
+# Project local/private runtime files
+config/general.yaml
+config/email_template_override.yaml
+groups/*/
+output/
+restart.flag
+error.log

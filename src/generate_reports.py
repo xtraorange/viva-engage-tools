@@ -67,6 +67,28 @@ def prompt_choice(groups: List[Group]) -> tuple:
     return list(dict.fromkeys(selected)), should_email, override_email  # remove duplicates
 
 
+def process_group(
+    group: Group,
+    config: dict,
+    executor,
+    tracker,
+    should_email: bool = False,
+    job_num: int = 1,
+    job_total: int = 1,
+):
+    """Backward-compatible wrapper used by tests and older integrations."""
+    service = ReportService(config)
+    return service._process_single_group(
+        group=group,
+        executor=executor,
+        tracker=tracker,
+        should_email=should_email,
+        override_email=None,
+        job_num=job_num,
+        job_total=job_total,
+    )
+
+
 def main():
     parser = argparse.ArgumentParser(description="Generate Viva Engage email lists.")
     parser.add_argument("names", nargs="*", help="group handles or tags (or 'list')")
@@ -87,20 +109,8 @@ def main():
     base = os.getcwd()
     if not args.cli:
         # start web interface by default
-        from .ui import create_app
-        app = create_app()
-        import webbrowser
-        import threading
-        import time
-
-        def run_app():
-            app.run(host="127.0.0.1", port=5000, debug=False)
-
-        server_thread = threading.Thread(target=run_app, daemon=True)
-        server_thread.start()
-        time.sleep(1)  # wait a bit for server to start
-        webbrowser.open("http://127.0.0.1:5000")
-        server_thread.join()
+        from .ui import run_app
+        run_app()
         return
 
     # CLI mode

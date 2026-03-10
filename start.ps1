@@ -39,7 +39,7 @@ Write-Host "Starting Flask application..." -ForegroundColor Green
 Write-Host ""
 Write-Host "============================================" -ForegroundColor Cyan
 Write-Host "   Jampy Engage is starting..." -ForegroundColor Cyan
-Write-Host "   Opening http://localhost:5000 in your browser" -ForegroundColor Cyan
+Write-Host "   Opening the configured app URL in your browser" -ForegroundColor Cyan
 Write-Host "============================================" -ForegroundColor Cyan
 Write-Host ""
 Write-Host "Press Ctrl+C to stop the server." -ForegroundColor Yellow

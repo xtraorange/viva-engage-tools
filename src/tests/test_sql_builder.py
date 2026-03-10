@@ -53,3 +53,22 @@ def test_ignores_ui_only_selected_person_details_arg():
         selected_person_details=[{"id": "1", "first_name": "Gary"}],
     )
     assert "gwilson" in sql
+
+
+def test_by_person_accepts_string_person_entries():
+    sql = generate_safe_hierarchy_sql(
+        mode="by_person",
+        persons=["gwilson"],
+    )
+    assert "USERNAME = 'gwilson'" in sql
+
+
+def test_mode_specific_generation_ignores_other_mode_root_fields():
+    sql = generate_safe_hierarchy_sql(
+        mode="by_person",
+        persons=[{"person_username": "gwilson"}],
+        attributes_job_title="000123 - Some Title",
+        attributes_bu_code="SHOULD_NOT_APPLY",
+    )
+    assert "USERNAME = 'gwilson'" in sql
+    assert "SHOULD_NOT_APPLY" not in sql

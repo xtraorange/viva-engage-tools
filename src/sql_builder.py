@@ -9,6 +9,39 @@ def _extract_job_code(value: str) -> str:
         return value.split(" - ", 1)[0].strip()
     return value.strip()
 
+
+def _normalize_persons(persons: list) -> list:
+    """Normalize person payloads to list[{'person_id','person_username'}]."""
+    if not isinstance(persons, list):
+        return []
+
+    normalized = []
+    for person in persons:
+        if isinstance(person, dict):
+            pid = person.get("person_id") or person.get("id")
+            username = person.get("person_username") or person.get("username")
+            if isinstance(pid, str):
+                pid = pid.strip()
+            if isinstance(username, str):
+                username = username.strip()
+            if pid or username:
+                normalized.append({
+                    "person_id": pid,
+                    "person_username": username,
+                })
+            continue
+
+        if isinstance(person, str):
+            raw = person.strip()
+            if not raw:
+                continue
+            if raw.isdigit():
+                normalized.append({"person_id": raw, "person_username": None})
+            else:
+                normalized.append({"person_id": None, "person_username": raw})
+
+    return normalized
+
 def generate_hierarchy_sql(
     mode: str,  # "by_person" or "by_role"/"by_attributes" or "all_employees"
     persons: list = None,  # list of {person_id, person_username} dicts
@@ -95,6 +128,7 @@ FROM ({base_sql}) cte{where_clause}"""
     
     elif mode == "by_person":
         # Handle multiple persons or single person (backward compatibility)
+        persons = _normalize_persons(persons)
         if not persons:
             if not person_id and not (person_first_name or person_last_name or person_username):
                 raise ValueError("Must provide persons list or person_id/name/username for by_person mode")

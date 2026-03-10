@@ -17,7 +17,7 @@ if errorlevel 1 (
 echo.
 echo ============================================
 echo   Jampy Engage
-echo   http://localhost:5000
+echo   Opening configured app URL
 echo ============================================
 echo.
 
@@ -33,7 +33,7 @@ if exist restart.flag (
     echo.
     echo ============================================
     echo   Jampy Engage
-    echo   http://localhost:5000
+    echo   Opening configured app URL
     echo ============================================
     echo.
     goto loop

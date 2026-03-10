@@ -8,11 +8,9 @@ from ...services.group_service import GroupService
 from ...services.report_service import ReportService
 from ...generate_reports import discover_groups
 
-main_bp = Blueprint('main', __name__)
-
-
 def init_main_routes(app, base_path: str):
     """Initialize main routes with dependencies."""
+    main_bp = Blueprint('main', __name__)
     config_service = ConfigService(base_path)
     group_service = GroupService(base_path)
 
@@ -86,6 +84,7 @@ def init_main_routes(app, base_path: str):
             # Update general config based on form fields
             for key in [
                 "oracle_tns",
+                "ui_port",
                 "output_dir",
                 "max_workers",
                 "email_method",
@@ -101,7 +100,7 @@ def init_main_routes(app, base_path: str):
                     if val == "":
                         cfg.pop(key, None)
                     else:
-                        if key in ["max_workers", "smtp_port"]:
+                        if key in ["ui_port", "max_workers", "smtp_port"]:
                             try:
                                 cfg[key] = int(val)
                             except ValueError:

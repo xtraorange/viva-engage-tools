@@ -35,6 +35,13 @@
           </div>
         </div>
         <div class="mb-3">
+          <label for="ui_port" class="form-label">
+            Web App Port
+            <span class="badge bg-secondary" data-bs-toggle="tooltip" title="HTTP port used by the web UI. Change this if 5000 is already in use.">?</span>
+          </label>
+          <input type="number" class="form-control" id="ui_port" name="ui_port" value="{{ config.ui_port }}" placeholder="e.g., 5000">
+        </div>
+        <div class="mb-3">
           <label for="max_workers" class="form-label">
             Max Workers
             <span class="badge bg-secondary" data-bs-toggle="tooltip" title="Number of parallel jobs to run. Set to CPU count for optimal performance.">?</span>

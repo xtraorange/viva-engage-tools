@@ -8,11 +8,9 @@ from ...services.config_service import ConfigService
 from ...sql_builder import generate_safe_hierarchy_sql
 from ...db import DatabaseExecutor
 
-api_bp = Blueprint('api', __name__)
-
-
 def init_api_routes(app, base_path: str):
     """Initialize API routes with dependencies."""
+    api_bp = Blueprint('api', __name__)
     config_service = ConfigService(base_path)
 
     @api_bp.route("/api/search-employees", methods=["GET"])

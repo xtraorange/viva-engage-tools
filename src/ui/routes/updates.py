@@ -12,11 +12,9 @@ from datetime import datetime, timedelta
 
 from ...services.config_service import ConfigService
 
-updates_bp = Blueprint('updates', __name__)
-
-
 def init_updates_routes(app, base_path: str):
     """Initialize update routes with dependencies."""
+    updates_bp = Blueprint('updates', __name__)
     config_service = ConfigService(base_path)
     __version__, GITHUB_REPO = config_service.load_version_config()
     CHECK_INTERVAL_SECONDS = 24 * 60 * 60  # check GitHub no more than once per day

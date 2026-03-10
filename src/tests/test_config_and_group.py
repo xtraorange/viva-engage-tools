@@ -5,6 +5,7 @@ import yaml
 from src.config import load_general_config, load_group_config
 from src.group import Group
 from src.services.group_service import GroupService
+from src.services.config_service import ConfigService
 
 
 def test_general_config_defaults(tmp_path):
@@ -14,6 +15,22 @@ def test_general_config_defaults(tmp_path):
     assert cfg["oracle_tns"] == "test_tns"
     assert "output_dir" in cfg
     assert cfg["max_workers"] is None
+    assert cfg["ui_port"] == 5000
+
+
+def test_general_config_missing_file_uses_defaults(tmp_path):
+    missing_cfg = tmp_path / "does-not-exist.yaml"
+    cfg = load_general_config(str(missing_cfg))
+    assert cfg["ui_port"] == 5000
+    assert "output_dir" in cfg
+
+
+def test_config_service_saves_without_existing_config_folder(tmp_path):
+    svc = ConfigService(str(tmp_path))
+    svc.save_general_config({"oracle_tns": "dummy", "ui_port": 5050})
+    cfg = svc.load_general_config()
+    assert cfg["oracle_tns"] == "dummy"
+    assert cfg["ui_port"] == 5050
 
 
 def test_group_config(tmp_path):

@@ -3,13 +3,16 @@ import yaml
 
 
 def load_general_config(path: str) -> dict:
-    with open(path, "r", encoding="utf-8") as f:
-        cfg = yaml.safe_load(f)
+    cfg = {}
+    if os.path.exists(path):
+        with open(path, "r", encoding="utf-8") as f:
+            cfg = yaml.safe_load(f) or {}
     # provide defaults
     cfg.setdefault("output_dir", os.path.join(os.getcwd(), "output"))
     cfg.setdefault("max_workers", None)
     cfg.setdefault("email_method", "smtp")
     cfg.setdefault("outlook_auto_send", False)
+    cfg.setdefault("ui_port", 5000)
     return cfg
 
 

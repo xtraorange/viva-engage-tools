@@ -7,11 +7,9 @@ from ...services.group_service import GroupService
 from ...utils.validation import validate_group_handle
 from ...utils.file_utils import safe_delete_directory
 
-groups_bp = Blueprint('groups', __name__)
-
-
 def init_groups_routes(app, base_path: str):
     """Initialize group routes with dependencies."""
+    groups_bp = Blueprint('groups', __name__)
     group_service = GroupService(base_path)
 
     @groups_bp.route("/groups")

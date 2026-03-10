@@ -4,11 +4,9 @@ from flask import Blueprint, render_template, request, redirect, url_for
 from ...services.group_service import GroupService
 from ...utils.validation import validate_tag_name
 
-tags_bp = Blueprint('tags', __name__)
-
-
 def init_tags_routes(app, base_path: str):
     """Initialize tag routes with dependencies."""
+    tags_bp = Blueprint('tags', __name__)
     group_service = GroupService(base_path)
 
     @tags_bp.route("/tags")

@@ -50,6 +50,7 @@ class GroupService:
         if not handle or not handle.replace("_", "").replace("-", "").isalnum():
             raise ValueError("Invalid group handle")
 
+        os.makedirs(self.groups_path, exist_ok=True)
         group_dir = os.path.join(self.groups_path, handle)
         if os.path.exists(group_dir):
             raise ValueError("Group already exists")
