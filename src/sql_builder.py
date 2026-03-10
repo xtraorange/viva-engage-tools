@@ -10,19 +10,24 @@ def _extract_job_code(value: str) -> str:
     return value.strip()
 
 def generate_hierarchy_sql(
-    mode: str,  # "by_person" or "by_attributes" or "all_employees"
+    mode: str,  # "by_person" or "by_role"/"by_attributes" or "all_employees"
     persons: list = None,  # list of {person_id, person_username} dicts
     root_people: list = None,  # optional list of {first_name,last_name,job_title} for root comment
+    selected_person_details: list = None,  # ui-only, ignored by SQL generation
     person_id: str = None,  # deprecated: single person
     person_first_name: str = None,
     person_last_name: str = None,
     person_username: str = None,  # deprecated: single person
     attributes_job_title: str = None,
+    attributes_job_code: str = None,
+    attributes_job_title_text: str = None,
     attributes_bu_code: str = None,
     attributes_company: str = None,
     attributes_tree_branch: str = None,
     attributes_department_id: str = None,
     filter_job_titles: list = None,
+    filter_job_codes: list = None,
+    filter_job_titles_display: list = None,
     filter_bu_codes: list = None,
     filter_companies: list = None,
     filter_tree_branches: list = None,
@@ -55,8 +60,9 @@ WHERE status_code != 'T'"""
         # Build filters
         filter_where_parts = []
         
-        if filter_job_titles:
-            job_codes_csv = ",".join([f"'{_extract_job_code(jt)}'" for jt in filter_job_titles])
+        job_code_filters = filter_job_codes or ([_extract_job_code(jt) for jt in (filter_job_titles or [])] if filter_job_titles else [])
+        if job_code_filters:
+            job_codes_csv = ",".join([f"'{jc}'" for jc in job_code_filters])
             filter_where_parts.append(f"cte.JOB_CODE IN ({job_codes_csv})")
         
         if filter_bu_codes:
@@ -133,20 +139,21 @@ FROM ({base_sql}) cte{where_clause}"""
         
         root_where = "\n".join(where_parts)
         
-    elif mode == "by_attributes":
+    elif mode in ("by_attributes", "by_role"):
+        resolved_job_code = attributes_job_code or (attributes_job_title and _extract_job_code(attributes_job_title))
         if not (
-            attributes_job_title
+            resolved_job_code
             or attributes_bu_code
             or attributes_company
             or attributes_tree_branch
             or attributes_department_id
         ):
-            raise ValueError("Must provide at least one attribute for by_attributes mode")
+            raise ValueError("Must provide at least one attribute for by_role mode")
         
         where_parts = ["status_code != 'T'"]
         
-        if attributes_job_title:
-            where_parts.append(f"AND JOB_CODE = '{_extract_job_code(attributes_job_title)}'")
+        if resolved_job_code:
+            where_parts.append(f"AND JOB_CODE = '{resolved_job_code}'")
         if attributes_bu_code:
             where_parts.append(f"AND BU_CODE = '{attributes_bu_code}'")
         if attributes_company:
@@ -158,7 +165,7 @@ FROM ({base_sql}) cte{where_clause}"""
         
         root_where = "\n".join(where_parts)
     else:
-        raise ValueError("mode must be 'by_person', 'by_attributes', or 'all_employees'")
+        raise ValueError("mode must be 'by_person', 'by_role' (or 'by_attributes'), or 'all_employees'")
     
     comment = ""
 
@@ -218,8 +225,9 @@ AND status_code != 'T'{f" AND USERNAME <> '{person_username}'" if mode=='by_pers
     # Build additional filters
     filter_where_parts = []
     
-    if filter_job_titles:
-        job_codes_csv = ",".join([f"'{_extract_job_code(jt)}'" for jt in filter_job_titles])
+    job_code_filters = filter_job_codes or ([_extract_job_code(jt) for jt in (filter_job_titles or [])] if filter_job_titles else [])
+    if job_code_filters:
+        job_codes_csv = ",".join([f"'{jc}'" for jc in job_code_filters])
         filter_where_parts.append(f"cte.JOB_CODE IN ({job_codes_csv})")
     
     if filter_bu_codes:

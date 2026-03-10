@@ -19,7 +19,7 @@ def test_hierarchy_sql_contains_filter_columns():
     assert "COMPANY" in sql
     assert "TREE_BRANCH" in sql
     # filters should reference the cte alias
-    assert "cte.JOB_TITLE" in sql
+    assert "cte.JOB_CODE" in sql
     assert "cte.BU_CODE" in sql
 
 
@@ -30,4 +30,26 @@ def test_generate_safe_hierarchy_sql_escapes_quotes():
 
 def test_attributes_mode_requires_at_least_one():
     with pytest.raises(ValueError):
-        generate_hierarchy_sql(mode="by_attributes")
+        generate_hierarchy_sql(mode="by_role")
+
+
+def test_by_role_mode_works_with_separated_job_code_fields():
+    sql = generate_hierarchy_sql(
+        mode="by_role",
+        attributes_job_code="000545",
+        attributes_job_title_text="Area Manager",
+        attributes_department_id="02SA23",
+        filter_job_codes=["000760"],
+    )
+    assert "JOB_CODE = '000545'" in sql
+    assert "cte.JOB_CODE IN ('000760')" in sql
+    assert "cte.USERNAME" in sql
+
+
+def test_ignores_ui_only_selected_person_details_arg():
+    sql = generate_safe_hierarchy_sql(
+        mode="by_person",
+        persons=[{"person_username": "gwilson"}],
+        selected_person_details=[{"id": "1", "first_name": "Gary"}],
+    )
+    assert "gwilson" in sql

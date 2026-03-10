@@ -4,25 +4,26 @@ from datetime import datetime, timedelta
 from src.ui import create_app
 
 
+TEST_APP = create_app()
+TEST_APP.testing = True
+
+
 def test_ui_app_creation():
-    app = create_app()
+    app = TEST_APP
     assert app is not None
     # verify that important endpoints exist
     routes = {rule.endpoint for rule in app.url_map.iter_rules()}
-    assert 'index' in routes
-    assert 'edit_group' in routes
-    assert 'generate' in routes
-    assert 'status' in routes
-    assert 'perform_update' in routes
-    assert 'force_update' in routes
-    assert 'pick_folder' in routes
+    assert 'main.index' in routes
+    assert 'groups.edit_group' in routes
+    assert 'main.generate' in routes
+    assert 'main.status' in routes
+    assert 'updates.perform_update' in routes
+    assert 'updates.force_update' in routes
 
 
 @pytest.fixture
 def client():
-    app = create_app()
-    app.testing = True
-    return app.test_client()
+    return TEST_APP.test_client()
 
 
 def test_index_page(client):
@@ -35,14 +36,6 @@ def test_generate_page(client):
     rv = client.get('/')
     assert rv.status_code == 200
     assert b'Select Reports' in rv.data
-
-
-def test_pick_folder_api(client):
-    # the API should return a json object; since tkinter may not be available during tests, allow error
-    rv = client.get('/api/pick-folder')
-    assert rv.status_code == 200
-    data = rv.get_json()
-    assert 'cancelled' in data or 'error' in data or 'path' in data
 
 
 def test_updates_page(client):
@@ -77,8 +70,8 @@ def test_force_bypasses_cache(monkeypatch, client, tmp_path):
                     return b'{"body": "notes"}'
         return Dummy()
 
-    from src import ui
-    monkeypatch.setattr(ui.urllib.request, 'urlopen', fake_urlopen)
+    import src.ui.routes.updates as updates
+    monkeypatch.setattr(updates.urllib.request, 'urlopen', fake_urlopen)
 
     # perform a GET with check=true to clear and fetch
     rv = client.get('/updates?check=true')

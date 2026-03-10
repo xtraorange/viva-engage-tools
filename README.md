@@ -268,3 +268,14 @@ repository_url: "https://github.com/xtraorange/jampy-engage"
 The update checker reads this file directly from GitHub, so changes are detected immediately without any caching delays or release marking requirements.
 
 ```
+
+Copilot todo:
+When trying to generate on the By Person page after selecting a user I get this in the preview (and also as a connection error message):
+Error: generate_hierarchy_sql() got an unexpected keyword argument 'selected_person_details'
+When selecting a query from By Role, it saves the root people as the first list I got, before I refined by adding a department code.  Also I'm not sure we need to save root people at all, since we can simply requery for that when we load the query builder (especially since it may change).
+When I removed the custom sql script from a group that had saved parameters, it also deleted the saved parameters.
+I noticed that we're saving some parameters combined (for exmaple on the By Role page, we save job title and job code together).  Those need to be saved separately and put back together for display.
+Mode "by attributes" should be "by role" like we call it in the UI
+If by role is the mode, then when reopening the sql query builder to edit it we should go to that tab.  Similar for all.
+When generating a report even though parameters are saved for a group, I still got "failed: Group 'multisite_sellers_central_canada_viva_engage' has no query ove..."
+Please generate test cases for every piece of the app (and review and fix the existing test cases), then run those test cases and make corrections.  Please remove the test case that pops up a folder picker window.

@@ -270,18 +270,12 @@
     fieldTags[fieldId] = fieldTags[fieldId].filter(v => v !== value);
     updateTagsDisplay(fieldId);
     updateInputValue(fieldId);
-  }
-
-  function updateTagsDisplay(fieldId) {
-    const tagsDiv = document.getElementById(fieldId + '-tags');
-    tagsDiv.innerHTML = fieldTags[fieldId].map(value => `
       <span class="badge bg-primary d-inline-flex align-items-center gap-1">
         ${value}
         <button type="button" class="btn-close btn-close-white" aria-label="Remove" onclick="removeTag('${fieldId}', '${value.replace(/'/g, "\\'")}')"></button>
       </span>
     `).join('');
   }
-
   function updateInputValue(fieldId) {
     const input = document.getElementById(fieldId);
     input.value = fieldTags[fieldId].join(', ');
@@ -346,7 +340,7 @@
   });
 
   document.getElementById('by-role-tab').addEventListener('click', () => {
-    currentMode = 'by_attributes';
+    currentMode = 'by_role';
     updateRolePreview();
     updateSQL();
   });
@@ -685,16 +679,13 @@
           username: p.username,
           job_title: p.job_title || ''
         })),
-        root_people: selectedPersons.map(p => ({
-          first_name: p.first_name,
-          last_name: p.last_name,
-          job_title: p.job_title || ''
-        })),
         exclude_root: document.getElementById('person-exclude-root').checked,
       };
-    } else if (currentMode === 'by_attributes') {
-      mode = 'by_attributes';
+    } else if (currentMode === 'by_role') {
+      mode = 'by_role';
       const jobTitle = fieldTags['attr-job-title'][0] || '';
+      const jobCode = jobTitle && jobTitle.includes(' - ') ? jobTitle.split(' - ', 1)[0].trim() : jobTitle;
+      const jobTitleText = jobTitle && jobTitle.includes(' - ') ? jobTitle.split(' - ', 1)[1].trim() : '';
       const buCode = fieldTags['attr-bu-code'][0] || '';
       const company = fieldTags['attr-company'][0] || '';
       const branch = fieldTags['attr-tree-branch'][0] || '';
@@ -712,11 +703,12 @@
       payload = {
         mode,
         attributes_job_title: jobTitle || null,
+        attributes_job_code: jobCode || null,
+        attributes_job_title_text: jobTitleText || null,
         attributes_bu_code: buCode || null,
         attributes_company: company || null,
         attributes_tree_branch: branch || null,
         attributes_department_id: departmentId || null,
-        root_people: rolePreviewRoots,
       };
     } else if (currentMode === 'all_employees') {
       mode = 'all_employees';
@@ -724,7 +716,10 @@
     }
 
     // Add filters from tag fields
-    payload.filter_job_titles = fieldTags['filter-job-titles'] || [];
+    const filterJobDisplays = fieldTags['filter-job-titles'] || [];
+    payload.filter_job_titles = filterJobDisplays;
+    payload.filter_job_codes = filterJobDisplays.map(v => (v && v.includes(' - ') ? v.split(' - ', 1)[0].trim() : v));
+    payload.filter_job_titles_display = filterJobDisplays;
     payload.filter_bu_codes = fieldTags['filter-bu-codes'] || [];
     payload.filter_companies = fieldTags['filter-companies'] || [];
     payload.filter_tree_branches = fieldTags['filter-tree-branches'] || [];
@@ -732,11 +727,16 @@
     payload.filter_full_part_time = document.getElementById('filter-full-part-time').value || null;
     currentBuilderParams = JSON.parse(JSON.stringify(payload));
 
+    // Remove UI-only fields before preview generation call.
+    const previewPayload = JSON.parse(JSON.stringify(payload));
+    delete previewPayload.selected_person_details;
+    delete previewPayload.filter_job_titles_display;
+
     try {
       const response = await fetch('/api/generate-builder-sql', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
+        body: JSON.stringify(previewPayload)
       });
 
       const data = await response.json();
@@ -789,7 +789,7 @@
     if (!params || typeof params !== 'object') return;
 
     const mode = params.mode || 'by_person';
-    if (mode === 'by_attributes') {
+    if (mode === 'by_role' || mode === 'by_attributes') {
       document.getElementById('by-role-tab').click();
     } else if (mode === 'all_employees') {
       document.getElementById('all-employees-tab').click();
@@ -800,13 +800,27 @@
     selectedPersons = Array.isArray(params.selected_person_details) ? params.selected_person_details : [];
     updatePersonTagsDisplay();
 
+    const displayAttrJob = params.attributes_job_title
+      || ((params.attributes_job_code || '') + ((params.attributes_job_title_text || '') ? ` - ${params.attributes_job_title_text}` : '')).trim();
+
+    const displayFilterJobs = (Array.isArray(params.filter_job_titles_display) && params.filter_job_titles_display.length > 0)
+      ? params.filter_job_titles_display
+      : ((params.filter_job_codes || params.filter_job_titles || []).map((code, i) => {
+          const titles = params.filter_job_titles || [];
+          const maybeTitle = titles[i];
+          if (typeof maybeTitle === 'string' && maybeTitle.includes(' - ')) {
+            return maybeTitle;
+          }
+          return maybeTitle ? `${code} - ${maybeTitle}` : code;
+        }));
+
     const restoreFields = [
-      ['attr-job-title', params.attributes_job_title ? [params.attributes_job_title] : []],
+      ['attr-job-title', displayAttrJob ? [displayAttrJob] : []],
       ['attr-bu-code', params.attributes_bu_code ? [params.attributes_bu_code] : []],
       ['attr-company', params.attributes_company ? [params.attributes_company] : []],
       ['attr-tree-branch', params.attributes_tree_branch ? [params.attributes_tree_branch] : []],
       ['attr-department-id', params.attributes_department_id ? [params.attributes_department_id] : []],
-      ['filter-job-titles', params.filter_job_titles || []],
+      ['filter-job-titles', displayFilterJobs || []],
       ['filter-bu-codes', params.filter_bu_codes || []],
       ['filter-companies', params.filter_companies || []],
       ['filter-tree-branches', params.filter_tree_branches || []],
