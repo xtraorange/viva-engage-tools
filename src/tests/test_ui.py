@@ -194,6 +194,32 @@ def test_adhoc_match_ignores_blank_rows(client, monkeypatch):
     assert b"Rows Loaded" in rv.data
 
 
+def test_adhoc_match_caches_duplicate_name_lookups(client, monkeypatch):
+    import src.ui.routes.main as main_routes
+
+    call_count = {"count": 0}
+
+    class DummyLookupService:
+        def __init__(self, oracle_tns):
+            self.oracle_tns = oracle_tns
+
+        def search_candidates(self, query=None, first_name=None, last_name=None, limit=20):
+            call_count["count"] += 1
+            return [{"id": "1", "first_name": first_name or query, "last_name": last_name or "User", "username": "demo", "email": "demo@fastenal.com", "job_title": "Tester"}]
+
+    monkeypatch.setattr(main_routes, "EmployeeLookupService", DummyLookupService)
+
+    csv_bytes = io.BytesIO(b"name\nAlice Example\nAlice Example\n")
+    rv = client.post(
+        "/adhoc-match",
+        data={"csv_file": (csv_bytes, "names.csv")},
+        content_type="multipart/form-data",
+    )
+
+    assert rv.status_code == 200
+    assert call_count["count"] == 1
+
+
 def test_updates_page(client):
     rv = client.get("/updates")
     assert rv.status_code == 200

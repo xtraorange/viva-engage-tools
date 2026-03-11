@@ -46,17 +46,20 @@
               <input type="text" class="form-control" id="person-search" placeholder="Search by ID, name, or username...">
               <div id="person-suggestions" class="list-group mt-2" style="display: none; max-height: 200px; overflow-y: auto;"></div>
             </div>
-            <div class="form-check">
-              <input class="form-check-input" type="checkbox" id="person-exclude-root">
-              <label class="form-check-label" for="person-exclude-root">
-                Exclude the selected person(s) from results
-              </label>
-            </div>
-            <div class="form-check mt-2">
-              <input class="form-check-input" type="checkbox" id="person-direct-reports-only">
-              <label class="form-check-label" for="person-direct-reports-only">
-                Only Direct Reports
-              </label>
+            <div class="mb-2">
+              <label class="form-label mb-1">Options</label>
+              <div class="form-check">
+                <input class="form-check-input" type="checkbox" id="person-exclude-root">
+                <label class="form-check-label" for="person-exclude-root">
+                  Exclude the selected person(s) from results
+                </label>
+              </div>
+              <div class="form-check mt-2">
+                <input class="form-check-input" type="checkbox" id="person-direct-reports-only">
+                <label class="form-check-label" for="person-direct-reports-only">
+                  Only Direct Reports
+                </label>
+              </div>
             </div>
           </div>
 
@@ -93,14 +96,17 @@
               <input type="text" class="form-control" id="attr-department-id" placeholder="Type to search...">
               <div id="attr-department-id-suggestions" class="list-group mt-2" style="display: none; max-height: 200px; overflow-y: auto;"></div>
             </div>
+            <div class="mb-3">
+              <label class="form-label mb-1">Options</label>
+              <div class="form-check">
+                <input class="form-check-input" type="checkbox" id="role-direct-reports-only">
+                <label class="form-check-label" for="role-direct-reports-only">
+                  Only Direct Reports
+                </label>
+              </div>
+            </div>
             <div class="card border-light bg-light mt-3">
               <div class="card-body py-2">
-                <div class="form-check mb-2">
-                  <input class="form-check-input" type="checkbox" id="role-direct-reports-only">
-                  <label class="form-check-label" for="role-direct-reports-only">
-                    Only Direct Reports
-                  </label>
-                </div>
                 <div class="d-flex justify-content-between align-items-center mb-2">
                   <strong class="small text-uppercase text-muted">Current Hierarchy Leader Matches</strong>
                   <span id="role-preview-count" class="badge bg-secondary">0</span>

@@ -117,14 +117,27 @@ def init_main_routes(app, base_path: str):
                 return render_template("adhoc_match.html", error=f"Unable to read CSV: {exc}", exportable_fields=EXPORTABLE_FIELDS)
 
             results = []
+            match_cache = {}
             for row_index, row_dict in enumerate(uploaded_rows):
                 name_parts = _build_match_input(headers, row_dict)
-                matches = lookup_service.search_candidates(
-                    query=name_parts["display"],
-                    first_name=name_parts["first_name"],
-                    last_name=name_parts["last_name"],
-                    limit=10,
-                ) if name_parts["display"] else []
+                cache_key = (
+                    (name_parts.get("display") or "").strip().lower(),
+                    (name_parts.get("first_name") or "").strip().lower(),
+                    (name_parts.get("last_name") or "").strip().lower(),
+                )
+
+                if not cache_key[0]:
+                    matches = []
+                elif cache_key in match_cache:
+                    matches = match_cache[cache_key]
+                else:
+                    matches = lookup_service.search_candidates(
+                        query=name_parts["display"],
+                        first_name=name_parts["first_name"],
+                        last_name=name_parts["last_name"],
+                        limit=10,
+                    )
+                    match_cache[cache_key] = matches
 
                 selected_index = 0 if len(matches) == 1 else None
                 results.append({

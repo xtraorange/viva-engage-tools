@@ -83,8 +83,14 @@
             <small>Live view of what will run based on your current choices</small>
           </div>
           <div class="card-body">
-            <div id="selection-summary-text" class="mb-3 text-muted small">No groups selected yet.</div>
-            <div id="selection-summary-list" class="generate-summary-list small"></div>
+            <div class="d-flex justify-content-between align-items-center mb-2">
+              <span class="text-muted small">Groups Selected</span>
+              <span id="selection-count" class="badge bg-secondary">0</span>
+            </div>
+            <div class="selected-groups-box">
+              <div id="selection-summary-list" class="generate-summary-list small"></div>
+            </div>
+            <div id="selection-summary-text" class="mt-2 text-muted small">No groups selected yet.</div>
           </div>
         </div>
 
@@ -106,6 +112,11 @@
               <input type="email" class="form-control" id="override_email" name="override_email" placeholder="Leave blank to use group recipients">
               <small class="form-text text-muted">If provided, all reports will be sent to this address instead of group recipients</small>
             </div>
+            <div class="mb-3 p-2 rounded" style="background: #f8fafc; border: 1px solid var(--app-border);">
+              <div class="text-muted small">Estimated Runtime</div>
+              <div id="estimate-runtime" class="fw-semibold">No runtime estimate yet.</div>
+              <div id="estimate-unknown" class="text-muted small"></div>
+            </div>
             <button type="submit" class="btn btn-primary btn-lg w-100">
               Start Generation
             </button>
@@ -116,6 +127,18 @@
   </div>
 </form>
 
+<div id="generate-loading-overlay" class="position-fixed top-0 start-0 w-100 h-100 align-items-center justify-content-center" style="display: none; background-color: rgba(0, 0, 0, 0.45); z-index: 9999;">
+  <div class="card text-center p-4" style="min-width: 340px; max-width: 480px;">
+    <div class="mb-3">
+      <div class="spinner-border text-primary" role="status">
+        <span class="visually-hidden">Loading...</span>
+      </div>
+    </div>
+    <h5 class="mb-1">Starting Report Generation</h5>
+    <p class="text-muted mb-0" id="generate-loading-message">Preparing request...</p>
+  </div>
+</div>
+
 <style>
   .sticky-generate-panel {
     position: sticky;
@@ -123,8 +146,15 @@
   }
 
   .generate-summary-list {
-    max-height: 420px;
+    max-height: 260px;
     overflow-y: auto;
+  }
+
+  .selected-groups-box {
+    border: 1px solid var(--app-border);
+    border-radius: 8px;
+    padding: 8px 10px;
+    background: #fff;
   }
 
   .generate-summary-item {
@@ -156,7 +186,6 @@
 const generatePageData = JSON.parse(document.getElementById('generate-page-data').textContent || '{}');
 const availableGroups = Array.isArray(generatePageData.groups) ? generatePageData.groups : [];
 const perGroupAvgRuntime = generatePageData.per_group_avg_runtime_seconds || {};
-const configuredMaxWorkers = Number(generatePageData.max_workers || 0);
 
 function escapeHtml(value) {
   return String(value)
@@ -203,19 +232,7 @@ function estimateWallClock(selectedGroups) {
     return null;
   }
 
-  const workerCount = Math.max(1, configuredMaxWorkers || 1);
-  const lanes = Array.from({ length: workerCount }, () => 0);
-  known.forEach(runtime => {
-    let targetIndex = 0;
-    for (let index = 1; index < lanes.length; index += 1) {
-      if (lanes[index] < lanes[targetIndex]) {
-        targetIndex = index;
-      }
-    }
-    lanes[targetIndex] += runtime;
-  });
-
-  return Math.max(...lanes);
+  return known.reduce((sum, value) => sum + value, 0);
 }
 
 function getSelectedGroups() {
@@ -232,18 +249,27 @@ function getSelectedGroups() {
 function updateSelectionSummary() {
   const selectedGroups = getSelectedGroups().sort((a, b) => a.display_name.localeCompare(b.display_name));
   const summaryText = document.getElementById('selection-summary-text');
+  const countBadge = document.getElementById('selection-count');
   const summaryList = document.getElementById('selection-summary-list');
+  const estimateRuntime = document.getElementById('estimate-runtime');
+  const estimateUnknown = document.getElementById('estimate-unknown');
+
+  countBadge.textContent = String(selectedGroups.length);
 
   if (selectedGroups.length === 0) {
-    summaryText.textContent = 'No groups selected yet.';
-    summaryList.innerHTML = '';
+    summaryText.textContent = '';
+    summaryList.innerHTML = '<div class="text-muted py-2">No groups selected.</div>';
+    estimateRuntime.textContent = 'No runtime estimate yet.';
+    estimateUnknown.textContent = '';
     return;
   }
 
   const unknownCount = selectedGroups.filter(group => !Number.isFinite(Number(perGroupAvgRuntime[group.handle])) || Number(perGroupAvgRuntime[group.handle]) <= 0).length;
   const estimate = estimateWallClock(selectedGroups);
-  const estimateText = estimate == null ? 'No runtime estimate yet.' : `Estimated runtime: ${formatEstimate(estimate)}.`;
-  summaryText.textContent = `${selectedGroups.length} group${selectedGroups.length === 1 ? '' : 's'} selected. ${estimateText} ${unknownCount} without history.`;
+  const estimateText = estimate == null ? 'No runtime estimate yet.' : formatEstimate(estimate);
+  estimateRuntime.textContent = estimateText;
+  estimateUnknown.textContent = `${unknownCount} group${unknownCount === 1 ? '' : 's'} without runtime history.`;
+  summaryText.textContent = `${selectedGroups.length} group${selectedGroups.length === 1 ? '' : 's'} included by current selections.`;
 
   summaryList.innerHTML = selectedGroups.map(group => {
     const runtime = Number(perGroupAvgRuntime[group.handle]);
@@ -275,6 +301,7 @@ document.querySelectorAll('.group-checkbox, .tag-checkbox').forEach(input => {
 
 const emailCheckbox = document.getElementById('email');
 const overrideField = document.getElementById('override_email');
+const generateForm = document.querySelector('form[method="post"]');
 
 function updateEmailFieldState() {
   overrideField.disabled = !emailCheckbox.checked;
@@ -283,5 +310,15 @@ function updateEmailFieldState() {
 emailCheckbox.addEventListener('change', updateEmailFieldState);
 updateEmailFieldState();
 updateSelectionSummary();
+
+generateForm.addEventListener('submit', () => {
+  const selectedCount = getSelectedGroups().length;
+  const overlay = document.getElementById('generate-loading-overlay');
+  const msg = document.getElementById('generate-loading-message');
+  msg.textContent = selectedCount > 0
+    ? `Submitting ${selectedCount} group${selectedCount === 1 ? '' : 's'}...`
+    : 'Submitting request...';
+  overlay.style.display = 'flex';
+});
 </script>
 {% endblock %}
