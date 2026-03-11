@@ -23,17 +23,10 @@
         <div class="mb-3">
           <label for="tag_input" class="form-label">Tags</label>
           <input type="hidden" id="tags" name="tags" value="{{ config.tags_str }}">
-          <div class="input-group mb-2">
-            <input type="text" class="form-control" id="tag_input" list="all-tags-list" placeholder="Add a tag">
-            <button class="btn btn-outline-secondary" type="button" id="add_tag_btn">Add</button>
-          </div>
-          <datalist id="all-tags-list">
-            {% for tag in all_tags %}
-            <option value="{{ tag }}"></option>
-            {% endfor %}
-          </datalist>
-          <div id="tag-chip-container" class="d-flex flex-wrap gap-2"></div>
-          <small class="form-text text-muted">Press Enter or click Add to create a tag.</small>
+          <div id="tag-chip-container" class="mb-2 d-flex flex-wrap gap-1"></div>
+          <input type="text" class="form-control" id="tag_input" placeholder="Search or add a tag...">
+          <div id="tag-suggestions" class="list-group mt-2" style="display: none; max-height: 200px; overflow-y: auto;"></div>
+          <small class="form-text text-muted">Press Enter to add a new tag if no suggestion matches.</small>
         </div>
         </div>
       </fieldset>
@@ -149,30 +142,20 @@
     font-style: italic;
   }
 
-  .tag-chip {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    background: #eef7ff;
-    border: 1px solid #cfe7ff;
-    border-radius: 999px;
-    padding: 4px 10px;
-    font-size: 0.85rem;
+  #tag-suggestions .list-group-item {
+    cursor: pointer;
+    font-size: 0.9rem;
   }
 
-  .tag-chip button {
-    border: none;
-    background: transparent;
-    color: #6c757d;
-    line-height: 1;
-    padding: 0;
-    cursor: pointer;
+  #tag-suggestions .list-group-item:hover {
+    background-color: #e7f1ff;
   }
 </style>
 
 <script>
   const draftKey = `group_edit_draft:${window.location.pathname}`;
   const hasSavedOverride = {{ 'true' if config.has_override_query else 'false' }};
+  const allTags = {{ all_tags | tojson }};
   let tagList = [];
 
   function escapeHtml(value) {
@@ -220,6 +203,7 @@
       if (params.attributes_company) populationRows.push(renderRow('Role Company', [params.attributes_company]));
       if (params.attributes_tree_branch) populationRows.push(renderRow('Role Tree Branch', [params.attributes_tree_branch]));
       if (params.attributes_department_id) populationRows.push(renderRow('Role Department ID', [params.attributes_department_id]));
+      if (params.direct_reports_only) populationRows.push(renderRow('Options', ['Only direct reports']));
       if (populationRows.length === 1) {
         populationRows.push('<div class="summary-empty">No role attributes selected.</div>');
       }
@@ -244,6 +228,22 @@
       if (params.exclude_root) {
         populationRows.push(renderRow('Options', ['Exclude selected root person(s) from output']));
       }
+      if (params.direct_reports_only) {
+        populationRows.push(renderRow('Options', ['Only direct reports']));
+      }
+    }
+
+    const additions = Array.isArray(params.additional_person_details) ? params.additional_person_details : [];
+    if (additions.length > 0) {
+      const additionTags = additions.map(p => {
+        const parts = [
+          [p.first_name, p.last_name].filter(Boolean).join(' ').trim(),
+          p.username ? `(${p.username})` : '',
+          p.id ? `[${p.id}]` : ''
+        ].filter(Boolean);
+        return parts.join(' ');
+      });
+      populationRows.push(renderRow('Manual Additions', additionTags));
     }
 
     const filterJobs = Array.isArray(params.filter_job_titles_display) && params.filter_job_titles_display.length > 0
@@ -303,7 +303,7 @@
   function renderTagChips() {
     const container = document.getElementById('tag-chip-container');
     container.innerHTML = tagList.map((tag, index) => (
-      `<span class="tag-chip">${escapeHtml(tag)}<button type="button" data-tag-index="${index}" aria-label="Remove ${escapeHtml(tag)}">×</button></span>`
+      `<span class="badge bg-primary d-inline-flex align-items-center gap-1">${escapeHtml(tag)}<button type="button" class="btn-close btn-close-white" aria-label="Remove" data-tag-index="${index}"></button></span>`
     )).join('');
     syncTagsField();
   }
@@ -315,6 +315,43 @@
     if (exists) return;
     tagList.push(tag);
     renderTagChips();
+  }
+
+  function updateTagSuggestions(query) {
+    const suggestions = document.getElementById('tag-suggestions');
+    const normalized = String(query || '').trim().toLowerCase();
+    if (normalized.length < 1) {
+      suggestions.style.display = 'none';
+      return;
+    }
+
+    const matches = allTags.filter(tag => {
+      if (tagList.some(existing => existing.toLowerCase() === tag.toLowerCase())) {
+        return false;
+      }
+      return tag.toLowerCase().includes(normalized);
+    }).slice(0, 10);
+
+    if (matches.length === 0) {
+      suggestions.innerHTML = '<div class="list-group-item text-muted">Press Enter to add this tag</div>';
+      suggestions.style.display = 'block';
+      return;
+    }
+
+    suggestions.innerHTML = matches.map(tag => (
+      `<a href="#" class="list-group-item list-group-item-action" data-tag="${escapeHtml(tag)}">${escapeHtml(tag)}</a>`
+    )).join('');
+
+    suggestions.querySelectorAll('a').forEach(item => {
+      item.addEventListener('click', (event) => {
+        event.preventDefault();
+        addTag(item.getAttribute('data-tag'));
+        document.getElementById('tag_input').value = '';
+        suggestions.style.display = 'none';
+      });
+    });
+
+    suggestions.style.display = 'block';
   }
 
   function collectDraft() {
@@ -405,11 +442,8 @@
     tagList = parseTags(document.getElementById('tags').value);
     renderTagChips();
 
-    document.getElementById('add_tag_btn').addEventListener('click', () => {
-      const input = document.getElementById('tag_input');
-      addTag(input.value);
-      input.value = '';
-      input.focus();
+    document.getElementById('tag_input').addEventListener('input', (event) => {
+      updateTagSuggestions(event.target.value);
     });
 
     document.getElementById('tag_input').addEventListener('keydown', (event) => {
@@ -418,6 +452,13 @@
       const input = event.target;
       addTag(input.value);
       input.value = '';
+      document.getElementById('tag-suggestions').style.display = 'none';
+    });
+
+    document.getElementById('tag_input').addEventListener('blur', () => {
+      setTimeout(() => {
+        document.getElementById('tag-suggestions').style.display = 'none';
+      }, 150);
     });
 
     document.getElementById('tag-chip-container').addEventListener('click', (event) => {

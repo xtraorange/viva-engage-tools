@@ -1,6 +1,7 @@
 import os
 import socket
 import time
+import io
 from pathlib import Path
 
 import pytest
@@ -156,6 +157,8 @@ def test_generate_page(client):
     assert b"Generate Reports" in rv.data
     assert b"By Group" in rv.data
     assert b"By Tag" in rv.data
+    assert b"Selection Summary" in rv.data
+    assert b"Generation Options" in rv.data
 
 
 def test_dashboard_stats_api(client):
@@ -164,6 +167,31 @@ def test_dashboard_stats_api(client):
     data = rv.get_json()
     assert "total_run_requests" in data
     assert "per_group_generation_counts" in data
+
+
+def test_adhoc_match_ignores_blank_rows(client, monkeypatch):
+    import src.ui.routes.main as main_routes
+
+    class DummyLookupService:
+        def __init__(self, oracle_tns):
+            self.oracle_tns = oracle_tns
+
+        def search_candidates(self, query=None, first_name=None, last_name=None, limit=20):
+            return [{"id": "1", "first_name": first_name or query, "last_name": last_name or "User", "username": "demo", "email": "demo@fastenal.com", "job_title": "Tester"}]
+
+    monkeypatch.setattr(main_routes, "EmployeeLookupService", DummyLookupService)
+
+    csv_bytes = io.BytesIO(b"name\nAlice Example\n\nBob Example\n")
+    rv = client.post(
+        "/adhoc-match",
+        data={"csv_file": (csv_bytes, "names.csv")},
+        content_type="multipart/form-data",
+    )
+    assert rv.status_code == 200
+    assert b'"row_index": 0' in rv.data
+    assert b'"row_index": 1' in rv.data
+    assert b'"row_index": 2' not in rv.data
+    assert b"Rows Loaded" in rv.data
 
 
 def test_updates_page(client):

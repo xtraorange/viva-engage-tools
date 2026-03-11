@@ -293,17 +293,10 @@ repository_url: "https://github.com/xtraorange/jampy-engage"
 
 The update checker reads this file directly from GitHub, so changes are detected immediately without any caching delays or release marking requirements.
 
-TODO:
- - General settings: the actions box needs better theming in the buttons.  They just look like a bunch of random colors and styles, pretty inconsistent.  Backup and restore should look similar, restart app should be at the top, and their colors should mmake sense.  Also we go outline, outline, solid button, outline, solid button which just looks odd.
- - Since the update page now has a link in settings, let's drop it from the top bar.
- - Let's also add a link to e-mail templates in settings and drop that from the top bar.
- - Lets put app settings last on the bar and rename it to just Settings.
- - groups and tags should not be centered on their pages, it just looks weird.  Lets left align that text again.
- - Lets make the display name the top of the groups instead of the handle.  Then let's add the handle in smaller text in the top header as well.
- - Is there anything else we could display about the groups in the box so it doesn't appear so empty?
- - Let's add pagination and sort order to groups and tags.
- - The restart button in app settings indicated it wasn't able to send the restart signal, but the server still appeared to restart?
- - In general settings, lets move email settings to the top left.
- - Some pages have spacing under the header words, others don't.  They should all have it.  For example, Generate Reports has it, and App Settings doesn't.
- - Most of the app now has appropriate padding in the boxes, but edit group does not.  All boxes throughout the app should use the same config with the same padding.
- - The generate page is looking a little rough. Let's move the select all out of the headers of the by group and by tag boxes.  Also can we just make it look a little nicer over all, it just looks sort of messy.  Also lets add counts to the tags so we know how many will be generated from those.
+Todo:
+ - After generation is commplete, the "Back to Generate" button takes you instead to the dashboard.
+ - On the generate reports screen, the estimated runtime isn't making sense to mme... I have 2 groups select, with 1.2 and 1.1 seconds average for them.  The estimated run time is 1.2... shouldn't it be 2.3?  Or is it assuming some multi-threading type operations?
+ - On the generate reports screen, I think we can make the number of groups selected, and the estimate and number unable to add to the estimate a bit cleaner.  They don't need to be in the same place... maybe the top shows the number of groups selected and the time estimate is by the start generation button?  Mayybe we need soem different formatting?
+ - On the generate reports screen, let's put the selected groups inside of a scrolling box so the start generation button doesn't get below the screen and require weird scrolling things.
+ - When we load the adhoc name matcher file, there should probably be a loading screen with feedback.  Similar to how we do the generation status screen.  Something about what it's currently working on (maybe big picture and individual... so big picture might be loading file or searching names, while it also shows which name it's working on)... basically anything that takes any time should have a status, even getting ready to display everything.  Also, let's add the same loading wheel as the update screen uses.  Let's also add that to the report generation screen.
+ - On the query builder screen, the "Only Direct Reports" checkbox still appears inside the current hierarchy leader matches box on the By Role tab... it should be outside of that box, above the box, below department IDs.  Since we called it "options" on the group edit screen, let's add a label of Options before it on both by person (which should probably also include exclude the selected person from the results) and by role.

@@ -94,6 +94,8 @@ def init_main_routes(app, base_path: str):
 
         rows = []
         for raw_row in data_rows:
+            if not any(str(cell).strip() for cell in raw_row):
+                continue
             padded = raw_row + [""] * (len(headers) - len(raw_row))
             rows.append({header: padded[index] for index, header in enumerate(headers)})
         return headers, rows
@@ -239,8 +241,17 @@ def init_main_routes(app, base_path: str):
             for tag in g.tags:
                 tag_counts[tag] = tag_counts.get(tag, 0) + 1
         tags = sorted(tag_counts.keys())
+        metrics = stats_service.dashboard_metrics()
+        group_meta = [
+            {
+                "handle": g.handle,
+                "display_name": g.display_name or g.handle,
+                "tags": sorted(list(g.tags)) if g.tags else [],
+            }
+            for g in groups
+        ]
 
-        return render_template("report_generate.html", config=cfg, groups=groups, tags=tags, tag_counts=tag_counts,
+        return render_template("report_generate.html", config=cfg, groups=groups, tags=tags, tag_counts=tag_counts, metrics=metrics, group_meta=group_meta,
                                updating=app.config.get("updating"),
                                update_error=app.config.get("update_error"))
 
@@ -341,11 +352,13 @@ def start_jobs(app, selected, should_email, override_email):
             should_email,
             override_email,
             tracker=tracker,
+            return_details=True,
         )
         stats_service.record_run_completed(
             selected_handles=[g.handle for g in selected],
-            generated_files=generated,
+            generated_files=generated.get("csv_files", []),
             duration_seconds=time.perf_counter() - started,
+            group_run_details=generated.get("group_run_details", {}),
         )
         # Processing complete - tracker will be cleaned up by the UI
 

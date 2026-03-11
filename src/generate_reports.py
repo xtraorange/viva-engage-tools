@@ -118,7 +118,7 @@ def process_group(
 ):
     """Backward-compatible wrapper used by tests and older integrations."""
     service = ReportService(config)
-    return service._process_single_group(
+    result = service._process_single_group(
         group=group,
         executor=executor,
         tracker=tracker,
@@ -127,6 +127,7 @@ def process_group(
         job_num=job_num,
         job_total=job_total,
     )
+    return result.get("csv_path") if isinstance(result, dict) else result
 
 
 def main():

@@ -80,3 +80,26 @@ def test_mode_specific_generation_ignores_other_mode_root_fields():
     )
     assert "USERNAME = 'gwilson'" in sql
     assert "SHOULD_NOT_APPLY" not in sql
+
+
+def test_additional_people_are_unioned_after_main_query():
+    sql = generate_safe_hierarchy_sql(
+        mode="by_person",
+        persons=[{"person_username": "gwilson"}],
+        filter_bu_codes=["BU1"],
+        additional_persons=[{"person_username": "extrauser"}],
+    )
+    assert "UNION" in sql
+    assert "extrauser" in sql
+    assert "cte.BU_CODE IN ('BU1')" in sql
+
+
+def test_direct_reports_only_and_additional_people_can_coexist():
+    sql = generate_safe_hierarchy_sql(
+        mode="by_person",
+        persons=[{"person_id": "12345"}],
+        direct_reports_only=True,
+        additional_persons=[{"person_id": "99999"}],
+    )
+    assert "SUPERVISOR_ID IN" in sql
+    assert "99999" in sql

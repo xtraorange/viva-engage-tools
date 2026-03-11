@@ -120,7 +120,7 @@
     </div>
 
     <!-- STEP 2: Filter Results -->
-    <div class="card">
+    <div class="card mb-4">
       <div class="card-header bg-info text-white">
         <h5 class="mb-0">Step 2: Filter Results</h5>
         <small>Narrow down the results (optional)</small>
@@ -173,6 +173,21 @@
         </div>
       </div>
     </div>
+
+    <div class="card">
+      <div class="card-header bg-secondary text-white">
+        <h5 class="mb-0">Step 3: Add Specific People</h5>
+        <small>Optional people to append after the main query completes</small>
+      </div>
+      <div class="card-body">
+        <div class="mb-3">
+          <label for="additional-person-search" class="form-label">Add Employee(s)</label>
+          <div id="additional-person-tags" class="mb-2 d-flex flex-wrap gap-1"></div>
+          <input type="text" class="form-control" id="additional-person-search" placeholder="Search by ID, name, or username...">
+          <div id="additional-person-suggestions" class="list-group mt-2" style="display: none; max-height: 200px; overflow-y: auto;"></div>
+        </div>
+      </div>
+    </div>
   </div>
 
   <div class="col-lg-4">
@@ -216,11 +231,14 @@
 
 <!-- Typeahead Styles -->
 <style>
-  #person-suggestions .list-group-item {
+  #person-suggestions .list-group-item,
+  #additional-person-suggestions .list-group-item {
     cursor: pointer;
     font-size: 0.9rem;
   }
-  #person-suggestions .list-group-item:hover {
+
+  #person-suggestions .list-group-item:hover,
+  #additional-person-suggestions .list-group-item:hover {
     background-color: #e7f1ff;
   }
 
@@ -366,6 +384,7 @@
 
   // Person tag management
   let selectedPersons = [];
+  let selectedAdditionalPersons = [];
 
   function addPersonTag(person) {
     if (!selectedPersons.find(p => p.id === person.id)) {
@@ -385,6 +404,29 @@
       <span class="badge bg-primary d-inline-flex align-items-center gap-1">
         ${person.first_name} ${person.last_name} - ${person.job_title || 'No title'}
         <button type="button" class="btn-close btn-close-white" aria-label="Remove" onclick="removePersonTag('${person.id}')"></button>
+      </span>
+    `).join('');
+    updateSQL();
+  }
+
+  function addAdditionalPersonTag(person) {
+    if (!selectedAdditionalPersons.find(p => p.id === person.id)) {
+      selectedAdditionalPersons.push(person);
+    }
+    updateAdditionalPersonTagsDisplay();
+  }
+
+  function removeAdditionalPersonTag(personId) {
+    selectedAdditionalPersons = selectedAdditionalPersons.filter(p => p.id !== personId);
+    updateAdditionalPersonTagsDisplay();
+  }
+
+  function updateAdditionalPersonTagsDisplay() {
+    const tagsDiv = document.getElementById('additional-person-tags');
+    tagsDiv.innerHTML = selectedAdditionalPersons.map(person => `
+      <span class="badge bg-primary d-inline-flex align-items-center gap-1">
+        ${person.first_name} ${person.last_name} - ${person.job_title || 'No title'}
+        <button type="button" class="btn-close btn-close-white" aria-label="Remove" onclick="removeAdditionalPersonTag('${person.id}')"></button>
       </span>
     `).join('');
     updateSQL();
@@ -609,69 +651,74 @@
   document.getElementById('person-direct-reports-only').addEventListener('change', updateSQL);
   document.getElementById('role-direct-reports-only').addEventListener('change', updateSQL);
 
-  // Person search typeahead with tags
-  const personSearchInput = document.getElementById('person-search');
-  const personSuggestions = document.getElementById('person-suggestions');
-  
-  // Initialize fieldTags for persons
-  fieldTags['person-tags'] = [];
+  function wirePersonSearch(inputId, suggestionsId, addPersonHandler) {
+    const searchInput = document.getElementById(inputId);
+    const suggestions = document.getElementById(suggestionsId);
+    let searchTimer = null;
 
-  let personSearchTimer = null;
-  personSearchInput.addEventListener('input', (e) => {
-    const query = e.target.value.trim();
-    clearTimeout(personSearchTimer);
-    if (query.length < 2) {
-      personSuggestions.style.display = 'none';
-      return;
-    }
-    // wait briefly after typing stops before querying
-    personSearchTimer = setTimeout(async () => {
-      try {
-        const response = await fetch(`/api/search-employees?q=${encodeURIComponent(query)}`);
-        const employees = await response.json();
-        // ensure the input hasn't changed since we started
-        if (personSearchInput.value.trim() !== query) return;
-
-        if (employees && employees.error) {
-          showDbErrorBanner(employees.error);
-          personSuggestions.style.display = 'none';
-          return;
-        }
-        
-        if (Array.isArray(employees) && employees.length > 0) {
-        personSuggestions.innerHTML = employees.map(emp => `
-          <a href="#" class="list-group-item list-group-item-action" data-id="${emp.id}" data-first="${emp.first_name}" data-last="${emp.last_name}" data-username="${emp.username}" data-job-title="${emp.job_title || ''}">
-            <strong>${emp.first_name} ${emp.last_name}</strong><br>
-            <small>${emp.job_title || 'No title'} • ${emp.username}</small>
-          </a>
-        `).join('');
-        
-        personSuggestions.querySelectorAll('a').forEach(item => {
-          item.addEventListener('click', (e) => {
-            e.preventDefault();
-            const person = {
-              id: item.dataset.id,
-              first_name: item.dataset.first,
-              last_name: item.dataset.last,
-              username: item.dataset.username,
-              job_title: item.dataset.jobTitle || ''
-            };
-            addPersonTag(person);
-            personSearchInput.value = '';
-            personSuggestions.style.display = 'none';
-          });
-        });
-        personSuggestions.style.display = 'block';
-      } else {
-        personSuggestions.innerHTML = '<div class="list-group-item text-muted">No results</div>';
-        personSuggestions.style.display = 'block';
+    searchInput.addEventListener('input', (event) => {
+      const query = event.target.value.trim();
+      clearTimeout(searchTimer);
+      if (query.length < 2) {
+        suggestions.style.display = 'none';
+        return;
       }
-    } catch (error) {
-      console.error('Search error:', error);
-      showDbErrorBanner(error);
-    }
-  });
-  });
+
+      searchTimer = setTimeout(async () => {
+        try {
+          const response = await fetch(`/api/search-employees?q=${encodeURIComponent(query)}`);
+          const employees = await response.json();
+          if (searchInput.value.trim() !== query) return;
+
+          if (employees && employees.error) {
+            showDbErrorBanner(employees.error);
+            suggestions.style.display = 'none';
+            return;
+          }
+
+          if (Array.isArray(employees) && employees.length > 0) {
+            suggestions.innerHTML = employees.map(emp => `
+              <a href="#" class="list-group-item list-group-item-action" data-id="${emp.id}" data-first="${emp.first_name}" data-last="${emp.last_name}" data-username="${emp.username}" data-job-title="${emp.job_title || ''}">
+                <strong>${emp.first_name} ${emp.last_name}</strong><br>
+                <small>${emp.job_title || 'No title'} • ${emp.username}</small>
+              </a>
+            `).join('');
+
+            suggestions.querySelectorAll('a').forEach(item => {
+              item.addEventListener('click', (clickEvent) => {
+                clickEvent.preventDefault();
+                addPersonHandler({
+                  id: item.dataset.id,
+                  first_name: item.dataset.first,
+                  last_name: item.dataset.last,
+                  username: item.dataset.username,
+                  job_title: item.dataset.jobTitle || ''
+                });
+                searchInput.value = '';
+                suggestions.style.display = 'none';
+              });
+            });
+            suggestions.style.display = 'block';
+          } else {
+            suggestions.innerHTML = '<div class="list-group-item text-muted">No results</div>';
+            suggestions.style.display = 'block';
+          }
+        } catch (error) {
+          console.error('Search error:', error);
+          showDbErrorBanner(error);
+        }
+      }, 300);
+    });
+
+    searchInput.addEventListener('blur', () => {
+      setTimeout(() => {
+        suggestions.style.display = 'none';
+      }, 200);
+    });
+  }
+
+  wirePersonSearch('person-search', 'person-suggestions', addPersonTag);
+  wirePersonSearch('additional-person-search', 'additional-person-suggestions', addAdditionalPersonTag);
 
   async function updateRolePreview() {
     const list = document.getElementById('role-preview-list');
@@ -821,11 +868,23 @@
     payload.filter_tree_branches = fieldTags['filter-tree-branches'] || [];
     payload.filter_department_ids = fieldTags['filter-department-ids'] || [];
     payload.filter_full_part_time = document.getElementById('filter-full-part-time').value || null;
+    payload.additional_persons = selectedAdditionalPersons.map(p => ({
+      person_id: p.id,
+      person_username: p.username,
+    }));
+    payload.additional_person_details = selectedAdditionalPersons.map(p => ({
+      id: p.id,
+      first_name: p.first_name,
+      last_name: p.last_name,
+      username: p.username,
+      job_title: p.job_title || ''
+    }));
     currentBuilderParams = JSON.parse(JSON.stringify(payload));
 
     // Remove UI-only fields before preview generation call.
     const previewPayload = JSON.parse(JSON.stringify(payload));
     delete previewPayload.selected_person_details;
+    delete previewPayload.additional_person_details;
     delete previewPayload.filter_job_titles_display;
 
     try {
@@ -895,6 +954,8 @@
 
     selectedPersons = Array.isArray(params.selected_person_details) ? params.selected_person_details : [];
     updatePersonTagsDisplay();
+    selectedAdditionalPersons = Array.isArray(params.additional_person_details) ? params.additional_person_details : [];
+    updateAdditionalPersonTagsDisplay();
 
     const displayAttrJob = params.attributes_job_title_display
       || params.attributes_job_title

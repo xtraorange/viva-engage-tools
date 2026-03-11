@@ -11,103 +11,266 @@
 </div>
 
 <form method="post">
-  <div class="row g-3 mb-3">
-    <div class="col-md-6">
-      <div class="card h-100">
-        <div class="card-header">
-          <h5 class="mb-0">By Group</h5>
-        </div>
-        <div class="card-body">
-          <div class="mb-3 pb-2 border-bottom">
-            <div class="form-check">
-              <input class="form-check-input" type="checkbox" id="select-all-groups">
-              <label class="form-check-label text-muted small fw-semibold" for="select-all-groups">Select All Groups</label>
+  <div class="row g-4">
+    <div class="col-lg-8">
+      <div class="row g-3 mb-3">
+        <div class="col-md-6">
+          <div class="card h-100">
+            <div class="card-header">
+              <h5 class="mb-0">By Group</h5>
+            </div>
+            <div class="card-body">
+              <div class="mb-3 pb-2 border-bottom">
+                <div class="form-check">
+                  <input class="form-check-input" type="checkbox" id="select-all-groups">
+                  <label class="form-check-label text-muted small fw-semibold" for="select-all-groups">Select All Groups</label>
+                </div>
+              </div>
+              {% if groups %}
+                {% for g in groups %}
+                  <div class="form-check mb-2">
+                    <input class="form-check-input group-checkbox" type="checkbox" name="groups" value="{{ g.handle }}" id="group-{{ g.handle }}">
+                    <label class="form-check-label" for="group-{{ g.handle }}">
+                      {{ g.display_name or g.handle }}
+                      {% if g.display_name %}
+                        <span class="text-muted small">({{ g.handle }})</span>
+                      {% endif %}
+                    </label>
+                  </div>
+                {% endfor %}
+              {% else %}
+                <p class="text-muted small"><em>No groups available. Create groups in the Groups section first.</em></p>
+              {% endif %}
             </div>
           </div>
-          {% if groups %}
-            {% for g in groups %}
-              <div class="form-check mb-1">
-                <input class="form-check-input group-checkbox" type="checkbox" name="groups" value="{{ g.handle }}" id="group-{{ g.handle }}">
-                <label class="form-check-label" for="group-{{ g.handle }}">
-                  {{ g.display_name or g.handle }}
-                  {% if g.display_name %}
-                    <span class="text-muted small">({{ g.handle }})</span>
-                  {% endif %}
-                </label>
+        </div>
+        <div class="col-md-6">
+          <div class="card h-100">
+            <div class="card-header">
+              <h5 class="mb-0">By Tag</h5>
+            </div>
+            <div class="card-body">
+              <div class="mb-3 pb-2 border-bottom">
+                <div class="form-check">
+                  <input class="form-check-input" type="checkbox" id="select-all-tags">
+                  <label class="form-check-label text-muted small fw-semibold" for="select-all-tags">Select All Tags</label>
+                </div>
               </div>
-            {% endfor %}
-          {% else %}
-            <p class="text-muted small"><em>No groups available. Create groups in the Groups section first.</em></p>
-          {% endif %}
-        </div>
-      </div>
-    </div>
-    <div class="col-md-6">
-      <div class="card h-100">
-        <div class="card-header">
-          <h5 class="mb-0">By Tag</h5>
-        </div>
-        <div class="card-body">
-          <div class="mb-3 pb-2 border-bottom">
-            <div class="form-check">
-              <input class="form-check-input" type="checkbox" id="select-all-tags">
-              <label class="form-check-label text-muted small fw-semibold" for="select-all-tags">Select All Tags</label>
+              {% if tags %}
+                {% for tag in tags %}
+                  <div class="form-check mb-2">
+                    <input class="form-check-input tag-checkbox" type="checkbox" name="tags" value="{{ tag }}" id="tag-{{ tag }}">
+                    <label class="form-check-label" for="tag-{{ tag }}">
+                      {{ tag }}
+                      <span class="text-muted small">({{ tag_counts.get(tag, 0) }})</span>
+                    </label>
+                  </div>
+                {% endfor %}
+              {% else %}
+                <p class="text-muted small"><em>No tags available. Add tags to groups first.</em></p>
+              {% endif %}
             </div>
           </div>
-          {% if tags %}
-            {% for tag in tags %}
-              <div class="form-check mb-1">
-                <input class="form-check-input tag-checkbox" type="checkbox" name="tags" value="{{ tag }}" id="tag-{{ tag }}">
-                <label class="form-check-label" for="tag-{{ tag }}">
-                  {{ tag }}
-                  <span class="badge badge-soft-muted ms-1">{{ tag_counts.get(tag, 0) }} group{{ 's' if tag_counts.get(tag, 0) != 1 else '' }}</span>
-                </label>
-              </div>
-            {% endfor %}
-          {% else %}
-            <p class="text-muted small"><em>No tags available. Add tags to groups first.</em></p>
-          {% endif %}
         </div>
       </div>
     </div>
-  </div>
 
-  <div class="card mb-3">
-    <div class="card-header">
-      <h5 class="mb-0">Email Options</h5>
-      <small>Configure how to deliver the generated reports</small>
-    </div>
-    <div class="card-body">
-      <div class="form-check mb-3">
-        <input class="form-check-input" type="checkbox" name="email" id="email">
-        <label class="form-check-label" for="email">
-          <strong>Email results</strong>
-          <small class="d-block text-muted mt-1">Send reports to configured recipients (or override address below)</small>
-        </label>
-      </div>
-      <div class="mb-0">
-        <label for="override_email" class="form-label">Override Email Address <small class="text-muted">(optional)</small></label>
-        <input type="email" class="form-control" id="override_email" name="override_email" placeholder="Leave blank to use group recipients">
-        <small class="form-text text-muted">If provided, all reports will be sent to this address instead of group recipients</small>
-      </div>
-    </div>
-  </div>
+    <div class="col-lg-4">
+      <div class="sticky-generate-panel">
+        <div class="card mb-3">
+          <div class="card-header">
+            <h5 class="mb-0">Selection Summary</h5>
+            <small>Live view of what will run based on your current choices</small>
+          </div>
+          <div class="card-body">
+            <div id="selection-summary-text" class="mb-3 text-muted small">No groups selected yet.</div>
+            <div id="selection-summary-list" class="generate-summary-list small"></div>
+          </div>
+        </div>
 
-  <div class="d-flex gap-2">
-    <button type="submit" class="btn btn-primary btn-lg">
-      Start Generation
-    </button>
-    <a href="{{ url_for('main.index') }}" class="btn btn-outline-secondary btn-lg">Cancel</a>
+        <div class="card">
+          <div class="card-header">
+            <h5 class="mb-0">Generation Options</h5>
+            <small>Delivery settings and start action</small>
+          </div>
+          <div class="card-body">
+            <div class="form-check mb-3">
+              <input class="form-check-input" type="checkbox" name="email" id="email">
+              <label class="form-check-label" for="email">
+                <strong>Email results</strong>
+                <small class="d-block text-muted mt-1">Send reports to configured recipients or the override address below</small>
+              </label>
+            </div>
+            <div class="mb-3">
+              <label for="override_email" class="form-label">Override Email Address <small class="text-muted">(optional)</small></label>
+              <input type="email" class="form-control" id="override_email" name="override_email" placeholder="Leave blank to use group recipients">
+              <small class="form-text text-muted">If provided, all reports will be sent to this address instead of group recipients</small>
+            </div>
+            <button type="submit" class="btn btn-primary btn-lg w-100">
+              Start Generation
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
 </form>
 
+<style>
+  .sticky-generate-panel {
+    position: sticky;
+    top: 12px;
+  }
+
+  .generate-summary-list {
+    max-height: 420px;
+    overflow-y: auto;
+  }
+
+  .generate-summary-item {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 8px 0;
+    border-bottom: 1px solid var(--app-border);
+  }
+
+  .generate-summary-item:last-child {
+    border-bottom: none;
+    padding-bottom: 0;
+  }
+
+  .generate-summary-runtime {
+    white-space: nowrap;
+    color: var(--app-muted);
+  }
+</style>
+
+<script id="generate-page-data" type="application/json">{{ {
+  'groups': group_meta,
+  'per_group_avg_runtime_seconds': metrics.get('per_group_avg_runtime_seconds', {}),
+  'max_workers': config.get('max_workers')
+} | tojson }}</script>
+
 <script>
+const generatePageData = JSON.parse(document.getElementById('generate-page-data').textContent || '{}');
+const availableGroups = Array.isArray(generatePageData.groups) ? generatePageData.groups : [];
+const perGroupAvgRuntime = generatePageData.per_group_avg_runtime_seconds || {};
+const configuredMaxWorkers = Number(generatePageData.max_workers || 0);
+
+function escapeHtml(value) {
+  return String(value)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
+function formatDuration(seconds) {
+  if (seconds == null || Number.isNaN(seconds)) {
+    return 'No history';
+  }
+  if (seconds < 60) {
+    return `${seconds.toFixed(1)}s avg`;
+  }
+  const minutes = Math.floor(seconds / 60);
+  const remainder = seconds % 60;
+  return `${minutes}m ${remainder.toFixed(0)}s avg`;
+}
+
+function formatEstimate(seconds) {
+  if (seconds < 60) {
+    return `${seconds.toFixed(1)} seconds`;
+  }
+  const minutes = Math.floor(seconds / 60);
+  const remainder = Math.round(seconds % 60);
+  if (minutes < 60) {
+    return `${minutes} minute${minutes === 1 ? '' : 's'}${remainder ? ` ${remainder} seconds` : ''}`;
+  }
+  const hours = Math.floor(minutes / 60);
+  const remainingMinutes = minutes % 60;
+  return `${hours} hour${hours === 1 ? '' : 's'}${remainingMinutes ? ` ${remainingMinutes} minutes` : ''}`;
+}
+
+function estimateWallClock(selectedGroups) {
+  const known = selectedGroups
+    .map(group => Number(perGroupAvgRuntime[group.handle]))
+    .filter(value => Number.isFinite(value) && value > 0)
+    .sort((a, b) => b - a);
+
+  if (known.length === 0) {
+    return null;
+  }
+
+  const workerCount = Math.max(1, configuredMaxWorkers || 1);
+  const lanes = Array.from({ length: workerCount }, () => 0);
+  known.forEach(runtime => {
+    let targetIndex = 0;
+    for (let index = 1; index < lanes.length; index += 1) {
+      if (lanes[index] < lanes[targetIndex]) {
+        targetIndex = index;
+      }
+    }
+    lanes[targetIndex] += runtime;
+  });
+
+  return Math.max(...lanes);
+}
+
+function getSelectedGroups() {
+  const selectedHandles = new Set(Array.from(document.querySelectorAll('.group-checkbox:checked')).map(input => input.value));
+  const selectedTags = Array.from(document.querySelectorAll('.tag-checkbox:checked')).map(input => input.value);
+  availableGroups.forEach(group => {
+    if (selectedTags.some(tag => group.tags.includes(tag))) {
+      selectedHandles.add(group.handle);
+    }
+  });
+  return availableGroups.filter(group => selectedHandles.has(group.handle));
+}
+
+function updateSelectionSummary() {
+  const selectedGroups = getSelectedGroups().sort((a, b) => a.display_name.localeCompare(b.display_name));
+  const summaryText = document.getElementById('selection-summary-text');
+  const summaryList = document.getElementById('selection-summary-list');
+
+  if (selectedGroups.length === 0) {
+    summaryText.textContent = 'No groups selected yet.';
+    summaryList.innerHTML = '';
+    return;
+  }
+
+  const unknownCount = selectedGroups.filter(group => !Number.isFinite(Number(perGroupAvgRuntime[group.handle])) || Number(perGroupAvgRuntime[group.handle]) <= 0).length;
+  const estimate = estimateWallClock(selectedGroups);
+  const estimateText = estimate == null ? 'No runtime estimate yet.' : `Estimated runtime: ${formatEstimate(estimate)}.`;
+  summaryText.textContent = `${selectedGroups.length} group${selectedGroups.length === 1 ? '' : 's'} selected. ${estimateText} ${unknownCount} without history.`;
+
+  summaryList.innerHTML = selectedGroups.map(group => {
+    const runtime = Number(perGroupAvgRuntime[group.handle]);
+    return `
+      <div class="generate-summary-item">
+        <div>
+          <div class="fw-semibold">${escapeHtml(group.display_name)}</div>
+          <div class="text-muted">${escapeHtml(group.handle)}</div>
+        </div>
+        <div class="generate-summary-runtime">${formatDuration(Number.isFinite(runtime) && runtime > 0 ? runtime : null)}</div>
+      </div>
+    `;
+  }).join('');
+}
+
 document.getElementById('select-all-groups').addEventListener('change', function() {
   document.querySelectorAll('.group-checkbox').forEach(cb => cb.checked = this.checked);
+  updateSelectionSummary();
 });
 
 document.getElementById('select-all-tags').addEventListener('change', function() {
   document.querySelectorAll('.tag-checkbox').forEach(cb => cb.checked = this.checked);
+  updateSelectionSummary();
+});
+
+document.querySelectorAll('.group-checkbox, .tag-checkbox').forEach(input => {
+  input.addEventListener('change', updateSelectionSummary);
 });
 
 const emailCheckbox = document.getElementById('email');
@@ -119,5 +282,6 @@ function updateEmailFieldState() {
 
 emailCheckbox.addEventListener('change', updateEmailFieldState);
 updateEmailFieldState();
+updateSelectionSummary();
 </script>
 {% endblock %}

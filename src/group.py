@@ -33,11 +33,13 @@ class Group:
         allowed = {
             "mode",
             "persons",
+            "additional_persons",
             "person_id",
             "person_first_name",
             "person_last_name",
             "person_username",
             "selected_person_details",
+            "additional_person_details",
             "attributes_job_title",
             "attributes_job_title_display",
             "attributes_job_code",

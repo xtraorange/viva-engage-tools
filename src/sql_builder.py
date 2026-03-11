@@ -45,8 +45,10 @@ def _normalize_persons(persons: list) -> list:
 def generate_hierarchy_sql(
     mode: str,  # "by_person" or "by_role"/"by_attributes" or "all_employees"
     persons: list = None,  # list of {person_id, person_username} dicts
+    additional_persons: list = None,  # optional explicit additions appended after main query
     root_people: list = None,  # optional list of {first_name,last_name,job_title} for root comment
     selected_person_details: list = None,  # ui-only, ignored by SQL generation
+    additional_person_details: list = None,  # ui-only, ignored by SQL generation
     person_id: str = None,  # deprecated: single person
     person_first_name: str = None,
     person_last_name: str = None,
@@ -191,6 +193,7 @@ FROM omsadm.employee_mv cte{where_clause}"""
         raise ValueError("mode must be 'by_person', 'by_role' (or 'by_attributes'), or 'all_employees'")
     
     comment = ""
+    additional_people = _normalize_persons(additional_persons)
 
     # Build the hierarchy using Oracle CONNECT BY syntax for each person
     hierarchy_parts = []
@@ -327,8 +330,30 @@ AND status_code != 'T'{f" AND USERNAME <> '{person_username}'" if mode=='by_pers
     if filter_where_parts:
         where_clause = "\nWHERE " + "\n  AND ".join(filter_where_parts)
     
-    final_query = f"""SELECT cte.USERNAME
+    base_query = f"""SELECT cte.USERNAME
 FROM ({hierarchy_sql}) cte{where_clause}"""
+
+    if additional_people:
+        addition_conditions = []
+        for person in additional_people:
+            if person.get("person_username"):
+                addition_conditions.append(f"USERNAME = '{person.get('person_username')}'")
+            elif person.get("person_id"):
+                addition_conditions.append(f"EMPLOYEE_ID = '{person.get('person_id')}'")
+
+        additions_query = f"""SELECT USERNAME
+FROM omsadm.employee_mv
+WHERE status_code != 'T'
+  AND ({' OR '.join(addition_conditions)})"""
+
+        final_query = f"""SELECT DISTINCT merged.USERNAME
+FROM (
+{base_query}
+UNION
+{additions_query}
+) merged"""
+    else:
+        final_query = base_query
     
     return final_query
 

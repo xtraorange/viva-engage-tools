@@ -33,6 +33,8 @@ class StatsService:
             "reports_email_default_total": 0,
             "reports_email_override_total": 0,
             "runs_with_override_email": 0,
+            "per_group_runtime_seconds_total": {},
+            "per_group_completed_runs": {},
         }
 
     def load_stats(self) -> Dict[str, Any]:
@@ -104,6 +106,7 @@ class StatsService:
         selected_handles: List[str],
         generated_files: List[str],
         duration_seconds: float,
+        group_run_details: Dict[str, Dict[str, Any]] | None = None,
     ) -> None:
         stats = self.load_stats()
 
@@ -129,6 +132,8 @@ class StatsService:
             )
 
         per_group = stats.get("per_group_generation_counts") or {}
+        per_group_runtime_totals = stats.get("per_group_runtime_seconds_total") or {}
+        per_group_completed_runs = stats.get("per_group_completed_runs") or {}
         for path in generated_files:
             name = os.path.basename(path)
             if " (" in name:
@@ -137,7 +142,16 @@ class StatsService:
                 handle = name
             per_group[handle] = int(per_group.get(handle, 0)) + 1
 
+        for handle, detail in (group_run_details or {}).items():
+            if not detail.get("success"):
+                continue
+            duration = float(detail.get("duration_seconds") or 0.0)
+            per_group_runtime_totals[handle] = round(float(per_group_runtime_totals.get(handle, 0.0)) + duration, 3)
+            per_group_completed_runs[handle] = int(per_group_completed_runs.get(handle, 0)) + 1
+
         stats["per_group_generation_counts"] = per_group
+        stats["per_group_runtime_seconds_total"] = per_group_runtime_totals
+        stats["per_group_completed_runs"] = per_group_completed_runs
         self.save_stats(stats)
 
     def dashboard_metrics(self) -> Dict[str, Any]:
@@ -147,6 +161,14 @@ class StatsService:
         most_generated_count = 0
         if per_group:
             most_generated_handle, most_generated_count = max(per_group.items(), key=lambda x: x[1])
+
+        runtime_totals = stats.get("per_group_runtime_seconds_total") or {}
+        runtime_counts = stats.get("per_group_completed_runs") or {}
+        per_group_avg_runtime_seconds = {}
+        for handle, total in runtime_totals.items():
+            count = int(runtime_counts.get(handle, 0))
+            if count > 0:
+                per_group_avg_runtime_seconds[handle] = round(float(total) / count, 3)
 
         return {
             "total_run_requests": int(stats.get("total_run_requests", 0)),
@@ -167,4 +189,5 @@ class StatsService:
             "reports_email_default_total": int(stats.get("reports_email_default_total", 0)),
             "reports_email_override_total": int(stats.get("reports_email_override_total", 0)),
             "runs_with_override_email": int(stats.get("runs_with_override_email", 0)),
+            "per_group_avg_runtime_seconds": per_group_avg_runtime_seconds,
         }

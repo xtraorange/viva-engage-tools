@@ -1,6 +1,7 @@
 """Core report generation service."""
 import os
 from datetime import datetime
+from time import perf_counter
 from typing import List, Optional
 
 from ..config import load_general_config
@@ -22,7 +23,8 @@ class ReportService:
         should_email: bool = False,
         override_email: Optional[str] = None,
         progress_callback: Optional[callable] = None,
-        tracker: Optional[ProgressTracker] = None
+        tracker: Optional[ProgressTracker] = None,
+        return_details: bool = False,
     ) -> List[str]:
         """Process multiple groups and generate reports.
 
@@ -41,6 +43,7 @@ class ReportService:
         if tracker is None:
             tracker = ProgressTracker(len(groups))
         csv_files = []
+        group_run_details = {}
 
         try:
             from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -63,7 +66,13 @@ class ReportService:
 
                 for future in as_completed(futures):
                     try:
-                        csv_path = future.result()
+                        result = future.result()
+                        if result:
+                            group_run_details[result["handle"]] = {
+                                "duration_seconds": result["duration_seconds"],
+                                "success": bool(result["csv_path"]),
+                            }
+                        csv_path = result.get("csv_path") if result else None
                         if csv_path:
                             csv_files.append(csv_path)
                             if progress_callback:
@@ -80,6 +89,12 @@ class ReportService:
                 executor.close()
             except Exception:
                 pass
+
+        if return_details:
+            return {
+                "csv_files": csv_files,
+                "group_run_details": group_run_details,
+            }
 
         return csv_files
 
@@ -99,6 +114,7 @@ class ReportService:
             Path to generated CSV file, or None if failed
         """
         handle = group.handle
+        started = perf_counter()
         tracker.update(handle, f"generating member list ({job_num}/{job_total})")
 
         try:
@@ -131,11 +147,19 @@ class ReportService:
                 tracker.update(handle, "sending email")
                 self._send_group_email(group, fullpath, len(rows), date_str)
 
-            return fullpath
+            return {
+                "handle": handle,
+                "csv_path": fullpath,
+                "duration_seconds": round(perf_counter() - started, 3),
+            }
 
         except Exception as e:
             tracker.update(handle, f"failed: {e}")
-            return None
+            return {
+                "handle": handle,
+                "csv_path": None,
+                "duration_seconds": round(perf_counter() - started, 3),
+            }
         finally:
             tracker.increment(handle)
 
