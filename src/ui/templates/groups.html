@@ -165,6 +165,12 @@
       updateDisplay();
     });
     nextBtn.addEventListener('click', () => {
+      const filtered = allCards.filter(card => {
+        if (!searchTerm) return true;
+        return getName(card).includes(searchTerm) || getHandle(card).includes(searchTerm);
+      });
+      const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+      if (currentPage >= totalPages - 1) return;
       currentPage++;
       updateDisplay();
     });

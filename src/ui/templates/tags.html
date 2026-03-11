@@ -123,6 +123,8 @@
         nextBtn.disabled = currentPage >= totalPages - 1;
       } else {
         paginationControls.hidden = true;
+        prevBtn.disabled = true;
+        nextBtn.disabled = true;
       }
     }
 
@@ -138,8 +140,21 @@
       updateDisplay();
     });
 
-    prevBtn.addEventListener('click', () => { currentPage--; updateDisplay(); });
-    nextBtn.addEventListener('click', () => { currentPage++; updateDisplay(); });
+    prevBtn.addEventListener('click', () => {
+      if (currentPage === 0) return;
+      currentPage--;
+      updateDisplay();
+    });
+    nextBtn.addEventListener('click', () => {
+      const filtered = allCards.filter(card => {
+        if (!searchTerm) return true;
+        return getName(card).includes(searchTerm);
+      });
+      const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+      if (currentPage >= totalPages - 1) return;
+      currentPage++;
+      updateDisplay();
+    });
 
     updateDisplay();
   });

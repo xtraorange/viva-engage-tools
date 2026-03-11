@@ -1,0 +1,272 @@
+{% extends "base.html" %}
+
+{% block title %}Ad Hoc Name Matcher{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <div>
+    <h1 class="mb-1">Ad Hoc Name Matcher</h1>
+    <small class="text-muted">Upload a CSV of names, review possible employee matches, and export enriched columns.</small>
+  </div>
+</div>
+
+{% if error %}
+<div class="alert alert-danger">{{ error }}</div>
+{% endif %}
+
+<div class="card mb-4">
+  <div class="card-header">
+    <h5 class="mb-0">Upload CSV</h5>
+  </div>
+  <div class="card-body">
+    <form method="post" enctype="multipart/form-data" class="d-flex flex-wrap gap-2 align-items-end">
+      <div class="flex-grow-1">
+        <label for="csv_file" class="form-label">CSV File</label>
+        <input class="form-control" type="file" id="csv_file" name="csv_file" accept=".csv" required>
+      </div>
+      <button type="submit" class="btn btn-primary">Load Names</button>
+    </form>
+  </div>
+</div>
+
+{% if match_results %}
+<div class="row g-3 mb-4">
+  <div class="col-md-4">
+    <div class="card h-100"><div class="card-body"><div class="text-muted small">Rows Loaded</div><div id="metric-total" class="display-6 fw-semibold"></div></div></div>
+  </div>
+  <div class="col-md-4">
+    <div class="card h-100"><div class="card-body"><div class="text-muted small">Auto / Confirmed Matches</div><div id="metric-confirmed" class="display-6 fw-semibold"></div></div></div>
+  </div>
+  <div class="col-md-4">
+    <div class="card h-100"><div class="card-body"><div class="text-muted small">Needs Review / Blank</div><div id="metric-review" class="display-6 fw-semibold"></div></div></div>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-header d-flex justify-content-between align-items-center">
+    <div>
+      <h5 class="mb-0">Match Review</h5>
+      <small>Rows with a single match are preselected. Use the dropdown for ambiguous names.</small>
+    </div>
+    <button type="button" id="open-download-modal" class="btn btn-primary">Download Matched CSV</button>
+  </div>
+  <div class="card-body">
+    <div class="row g-2 mb-3">
+      <div class="col-md-4 ms-auto">
+        <label for="match-filter" class="form-label">Review Filter</label>
+        <select id="match-filter" class="form-select form-select-sm">
+          <option value="all">All Rows</option>
+          <option value="needs_review">Needs Review</option>
+          <option value="unmatched">Unmatched Only</option>
+          <option value="ambiguous">Ambiguous Only</option>
+          <option value="confirmed">Confirmed Matches</option>
+        </select>
+      </div>
+    </div>
+    <div class="table-responsive">
+      <table class="table align-middle">
+        <thead>
+          <tr>
+            <th style="width: 40px;">#</th>
+            <th>Source Name</th>
+            <th>Matched User</th>
+            <th style="width: 40%;">Selection</th>
+          </tr>
+        </thead>
+        <tbody id="match-table-body"></tbody>
+      </table>
+    </div>
+    <div class="d-flex justify-content-between align-items-center mt-3">
+      <button type="button" id="match-prev" class="btn btn-outline-secondary btn-sm">← Previous</button>
+      <span id="match-page-info" class="text-muted small"></span>
+      <button type="button" id="match-next" class="btn btn-outline-secondary btn-sm">Next →</button>
+    </div>
+  </div>
+</div>
+
+<div id="download-modal" class="matcher-modal" hidden>
+  <div class="matcher-modal-backdrop"></div>
+  <div class="matcher-modal-dialog card">
+    <div class="card-header d-flex justify-content-between align-items-center">
+      <h5 class="mb-0">Choose Export Columns</h5>
+      <button type="button" class="btn-close" id="close-download-modal" aria-label="Close"></button>
+    </div>
+    <div class="card-body">
+      <p class="text-muted small">Selected columns will be appended after the original CSV columns.</p>
+      <div class="row g-2">
+        {% for field, label in exportable_fields.items() %}
+        <div class="col-md-6">
+          <div class="form-check">
+            <input class="form-check-input export-field" type="checkbox" id="export-{{ field }}" value="{{ field }}" {% if field in ['username', 'email'] %}checked{% endif %}>
+            <label class="form-check-label" for="export-{{ field }}">{{ label }}</label>
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+    <div class="card-footer d-flex gap-2 justify-content-end">
+      <button type="button" class="btn btn-outline-secondary" id="cancel-download-modal">Cancel</button>
+      <button type="button" class="btn btn-primary" id="submit-download">Download</button>
+    </div>
+  </div>
+</div>
+
+<form id="download-form" method="post" action="{{ url_for('main.adhoc_match_download') }}" hidden>
+  <input type="hidden" name="match_state_json" id="match_state_json">
+  <input type="hidden" name="selected_fields_csv" id="selected_fields_csv">
+</form>
+
+<script id="match-data" type="application/json">{{ {'headers': headers, 'rows': match_results} | tojson }}</script>
+
+<style>
+  .matcher-modal {
+    position: fixed;
+    inset: 0;
+    z-index: 1050;
+  }
+
+  .matcher-modal-backdrop {
+    position: absolute;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.35);
+  }
+
+  .matcher-modal-dialog {
+    position: relative;
+    max-width: 720px;
+    margin: 8vh auto;
+    z-index: 1;
+  }
+</style>
+
+<script>
+  const PAGE_SIZE = 20;
+  let currentPage = 0;
+  let currentFilter = 'all';
+  const matchState = JSON.parse(document.getElementById('match-data').textContent || '{"headers":[],"rows":[]}');
+
+  function getSelectedMatch(row) {
+    return Number.isInteger(row.selected_index) && row.selected_index >= 0 && row.selected_index < row.matches.length
+      ? row.matches[row.selected_index]
+      : null;
+  }
+
+  function updateMetrics() {
+    const total = matchState.rows.length;
+    const confirmed = matchState.rows.filter(row => getSelectedMatch(row)).length;
+    document.getElementById('metric-total').textContent = total;
+    document.getElementById('metric-confirmed').textContent = confirmed;
+    document.getElementById('metric-review').textContent = total - confirmed;
+  }
+
+  function matchesCurrentFilter(row) {
+    const selected = getSelectedMatch(row);
+    const matchCount = Array.isArray(row.matches) ? row.matches.length : 0;
+    if (currentFilter === 'needs_review') return !selected;
+    if (currentFilter === 'unmatched') return matchCount === 0;
+    if (currentFilter === 'ambiguous') return matchCount > 1 && !selected;
+    if (currentFilter === 'confirmed') return !!selected;
+    return true;
+  }
+
+  function renderTable() {
+    const tbody = document.getElementById('match-table-body');
+    const filteredRows = matchState.rows.filter(matchesCurrentFilter);
+    const totalPages = Math.max(1, Math.ceil(filteredRows.length / PAGE_SIZE));
+    currentPage = Math.max(0, Math.min(currentPage, totalPages - 1));
+    const start = currentPage * PAGE_SIZE;
+    const pageRows = filteredRows.slice(start, start + PAGE_SIZE);
+
+    tbody.innerHTML = pageRows.map((row, index) => {
+      const selected = getSelectedMatch(row);
+      const options = ['<option value="">Leave blank</option>'].concat(
+        row.matches.map((match, matchIndex) => {
+          const label = [match.first_name, match.last_name].filter(Boolean).join(' ') || match.username || match.id;
+          const details = [match.username, match.email, match.job_title].filter(Boolean).join(' • ');
+          const isSelected = row.selected_index === matchIndex ? 'selected' : '';
+          return `<option value="${matchIndex}" ${isSelected}>${label}${details ? ' - ' + details : ''}</option>`;
+        })
+      ).join('');
+
+      return `
+        <tr>
+          <td>${start + index + 1}</td>
+          <td>
+            <div class="fw-semibold">${row.source_name || 'No name detected'}</div>
+            <div class="text-muted small">${matchState.headers.map(header => row.original[header]).filter(Boolean).join(' | ')}</div>
+          </td>
+          <td>
+            ${selected ? `<div class="fw-semibold">${[selected.first_name, selected.last_name].filter(Boolean).join(' ')}</div><div class="text-muted small">${[selected.username, selected.email].filter(Boolean).join(' • ')}</div>` : '<span class="text-muted small">No match selected</span>'}
+          </td>
+          <td>
+            <select class="form-select form-select-sm match-selector" data-row-index="${row.row_index}">
+              ${options}
+            </select>
+          </td>
+        </tr>
+      `;
+    }).join('');
+
+    document.getElementById('match-page-info').textContent = `Page ${currentPage + 1} of ${totalPages} (${filteredRows.length} rows shown of ${matchState.rows.length})`;
+    document.getElementById('match-prev').disabled = currentPage === 0;
+    document.getElementById('match-next').disabled = currentPage >= totalPages - 1;
+  }
+
+  function openModal() {
+    document.getElementById('download-modal').hidden = false;
+  }
+
+  function closeModal() {
+    document.getElementById('download-modal').hidden = true;
+  }
+
+  document.getElementById('match-table-body').addEventListener('change', (event) => {
+    const selector = event.target.closest('.match-selector');
+    if (!selector) return;
+    const rowIndex = Number(selector.getAttribute('data-row-index'));
+    const selectedValue = selector.value;
+    const row = matchState.rows.find(item => item.row_index === rowIndex);
+    if (!row) return;
+    row.selected_index = selectedValue === '' ? null : Number(selectedValue);
+    updateMetrics();
+    renderTable();
+  });
+
+  document.getElementById('match-prev').addEventListener('click', () => {
+    if (currentPage === 0) return;
+    currentPage -= 1;
+    renderTable();
+  });
+
+  document.getElementById('match-next').addEventListener('click', () => {
+    const filteredRows = matchState.rows.filter(matchesCurrentFilter);
+    const totalPages = Math.max(1, Math.ceil(filteredRows.length / PAGE_SIZE));
+    if (currentPage >= totalPages - 1) return;
+    currentPage += 1;
+    renderTable();
+  });
+
+  document.getElementById('match-filter').addEventListener('change', (event) => {
+    currentFilter = event.target.value;
+    currentPage = 0;
+    renderTable();
+  });
+
+  document.getElementById('open-download-modal').addEventListener('click', openModal);
+  document.getElementById('close-download-modal').addEventListener('click', closeModal);
+  document.getElementById('cancel-download-modal').addEventListener('click', closeModal);
+  document.querySelector('#download-modal .matcher-modal-backdrop').addEventListener('click', closeModal);
+
+  document.getElementById('submit-download').addEventListener('click', () => {
+    const fields = Array.from(document.querySelectorAll('.export-field:checked')).map(input => input.value);
+    document.getElementById('match_state_json').value = JSON.stringify(matchState);
+    document.getElementById('selected_fields_csv').value = fields.join(',');
+    document.getElementById('download-form').submit();
+  });
+
+  updateMetrics();
+  renderTable();
+</script>
+{% endif %}
+
+{% endblock %}

@@ -22,6 +22,7 @@ def init_groups_routes(app, base_path: str):
     def edit_group(handle):
         """Edit a group."""
         group = group_service.get_group(handle)
+        all_tags = group_service.get_all_tags()
         if group is None:
             return "Group not found", 404
 
@@ -48,7 +49,7 @@ def init_groups_routes(app, base_path: str):
                 cfg["override_query"] = group.read_override_query() if cfg["has_override_query"] else ""
                 cfg["query_builder"] = cfg.get("query_builder")
                 cfg["query_builder_json"] = json.dumps(cfg.get("query_builder") or {})
-                return render_template("group.html", group=group, config=cfg, error="Save either Query Builder parameters or an override SQL script.")
+                return render_template("group.html", group=group, config=cfg, error="Save either Query Builder parameters or an override SQL script.", all_tags=all_tags)
 
             tags = [t.strip() for t in tags_str.split(",") if t.strip()]
 
@@ -72,15 +73,16 @@ def init_groups_routes(app, base_path: str):
         cfg["query_builder"] = cfg.get("query_builder")
         cfg["query_builder_json"] = json.dumps(cfg.get("query_builder") or {})
 
-        return render_template("group.html", group=group, config=cfg)
+        return render_template("group.html", group=group, config=cfg, all_tags=all_tags)
 
     @groups_bp.route("/group/new", methods=["GET", "POST"])
     def new_group():
         """Create a new group."""
+        all_tags = group_service.get_all_tags()
         if request.method == "POST":
             handle = request.form.get("handle", "").strip()
             if not validate_group_handle(handle):
-                return render_template("group_new.html", error="Invalid group handle")
+                return render_template("group_new.html", error="Invalid group handle", all_tags=all_tags)
 
             display_name = request.form.get("display_name", handle).strip()
             tags = [t.strip() for t in request.form.get("tags", "").split(",") if t.strip()]
@@ -96,7 +98,7 @@ def init_groups_routes(app, base_path: str):
                     query_builder = None
 
             if not query and not query_builder:
-                return render_template("group_new.html", error="Create either Query Builder parameters or an override SQL script.")
+                return render_template("group_new.html", error="Create either Query Builder parameters or an override SQL script.", all_tags=all_tags)
 
             try:
                 group_service.create_group(
@@ -109,9 +111,9 @@ def init_groups_routes(app, base_path: str):
                 )
                 return redirect(url_for("groups.groups"))
             except ValueError as e:
-                return render_template("group_new.html", error=str(e))
+                return render_template("group_new.html", error=str(e), all_tags=all_tags)
 
-        return render_template("group_new.html", error=None)
+        return render_template("group_new.html", error=None, all_tags=all_tags)
 
     @groups_bp.route("/group/<handle>/delete", methods=["POST"])
     def delete_group(handle):

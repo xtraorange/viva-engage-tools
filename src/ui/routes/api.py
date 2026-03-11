@@ -5,6 +5,7 @@ import sys
 from datetime import datetime
 
 from ...services.config_service import ConfigService
+from ...services.employee_lookup_service import EmployeeLookupService
 from ...sql_builder import generate_safe_hierarchy_sql
 from ...db import DatabaseExecutor
 
@@ -23,53 +24,11 @@ def init_api_routes(app, base_path: str):
             return jsonify([])
 
         try:
-            executor = DatabaseExecutor(cfg.get("oracle_tns"))
-
-            # Build search conditions with support for full-name and partial name matching
-            conds = []
-            conds.append(f"UPPER(EMPLOYEE_ID) LIKE UPPER('%{query}%')")
-            conds.append(f"UPPER(FIRST_NAME) LIKE UPPER('%{query}%')")
-            conds.append(f"UPPER(LAST_NAME) LIKE UPPER('%{query}%')")
-            conds.append(f"UPPER(USERNAME) LIKE UPPER('%{query}%')")
-            # concatenated full name
-            conds.append(f"UPPER(FIRST_NAME || ' ' || LAST_NAME) LIKE UPPER('%{query}%')")
-            # if query contains two words, also try first/last separately
-            if ' ' in query:
-                parts = query.split()
-                if len(parts) >= 2:
-                    first_part = parts[0]
-                    last_part = parts[-1]
-                    conds.append(f"(UPPER(FIRST_NAME) LIKE UPPER('%{first_part}%') AND UPPER(LAST_NAME) LIKE UPPER('%{last_part}%'))")
-
-            where_clause = " OR ".join(conds)
-            sql = f"""
-            SELECT EMPLOYEE_ID, FIRST_NAME, LAST_NAME, USERNAME, JOB_TITLE FROM omsadm.employee_mv
-            WHERE ({where_clause})
-            AND status_code != 'T'
-            ORDER BY FIRST_NAME, LAST_NAME
-            """
-
-            results = executor.run_query(sql)
-            print(f"DEBUG: Query results: {results}, type: {type(results)}")
-            items = []
-            for row in results[:20]:  # Limit results
-                if isinstance(row, dict):
-                    items.append({
-                        "id": row.get("EMPLOYEE_ID") or row.get("employee_id"),
-                        "first_name": row.get("FIRST_NAME") or row.get("first_name"),
-                        "last_name": row.get("LAST_NAME") or row.get("last_name"),
-                        "username": row.get("USERNAME") or row.get("username"),
-                        "job_title": row.get("JOB_TITLE") or row.get("job_title"),
-                    })
-                else:
-                    items.append({
-                        "id": row[0],
-                        "first_name": row[1],
-                        "last_name": row[2],
-                        "username": row[3],
-                        "job_title": row[4],
-                    })
-            executor.close()
+            lookup_service = EmployeeLookupService(cfg.get("oracle_tns"))
+            parts = query.split()
+            first_name = parts[0] if len(parts) >= 2 else None
+            last_name = parts[-1] if len(parts) >= 2 else None
+            items = lookup_service.search_candidates(query=query, first_name=first_name, last_name=last_name, limit=20)
             return jsonify(items)
         except Exception as e:
             import traceback, logging, os

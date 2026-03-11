@@ -68,6 +68,7 @@ def generate_hierarchy_sql(
     filter_department_ids: list = None,
     filter_full_part_time: str = None,
     exclude_root: bool = False,
+    direct_reports_only: bool = False,
 ) -> str:
     """
     Generate a hierarchy query. 
@@ -194,7 +195,51 @@ FROM omsadm.employee_mv cte{where_clause}"""
     # Build the hierarchy using Oracle CONNECT BY syntax for each person
     hierarchy_parts = []
     
-    if mode == 'by_person' and persons and len(persons) > 1:
+    if direct_reports_only:
+        if mode == 'by_person' and persons and len(persons) > 1:
+            for person in persons:
+                pid = person.get('person_id')
+                pusername = person.get('person_username')
+
+                root_lookup = "status_code != 'T'"
+                if pusername:
+                    root_lookup += f" AND USERNAME = '{pusername}'"
+                elif pid:
+                    root_lookup += f" AND EMPLOYEE_ID = '{pid}'"
+
+                hierarchy_parts.append(f"""SELECT EMPLOYEE_ID,
+       USERNAME,
+       JOB_CODE,
+       DEPARTMENT_ID,
+       BU_CODE,
+       COMPANY,
+       TREE_BRANCH,
+       FULL_PART_TIME
+FROM omsadm.employee_mv
+WHERE status_code != 'T'
+  AND SUPERVISOR_ID IN (
+      SELECT EMPLOYEE_ID
+      FROM omsadm.employee_mv
+      WHERE {root_lookup}
+  )""")
+            hierarchy_sql = "\nUNION ALL\n".join(hierarchy_parts)
+        else:
+            hierarchy_sql = f"""SELECT EMPLOYEE_ID,
+       USERNAME,
+       JOB_CODE,
+       DEPARTMENT_ID,
+       BU_CODE,
+       COMPANY,
+       TREE_BRANCH,
+       FULL_PART_TIME
+FROM omsadm.employee_mv
+WHERE status_code != 'T'
+  AND SUPERVISOR_ID IN (
+      SELECT EMPLOYEE_ID
+      FROM omsadm.employee_mv
+      WHERE {root_where}
+  )"""
+    elif mode == 'by_person' and persons and len(persons) > 1:
         # Multiple persons - build UNION query
         for person in persons:
             pid = person.get('person_id')
@@ -269,7 +314,7 @@ AND status_code != 'T'{f" AND USERNAME <> '{person_username}'" if mode=='by_pers
     if filter_full_part_time:
         filter_where_parts.append(f"cte.FULL_PART_TIME = '{filter_full_part_time}'")
     
-    if exclude_root and mode == "by_person" and persons and len(persons) == 1:
+    if exclude_root and not direct_reports_only and mode == "by_person" and persons and len(persons) == 1:
         # exclude root using whichever identifier was used for single person
         person = persons[0]
         if person.get('person_username'):

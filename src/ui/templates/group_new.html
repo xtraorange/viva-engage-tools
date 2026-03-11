@@ -25,8 +25,19 @@
           <input type="text" class="form-control" id="display_name" name="display_name" placeholder="e.g., Sales Team">
         </div>
         <div class="mb-3">
-          <label for="tags" class="form-label">Tags (comma-separated)</label>
-          <input type="text" class="form-control" id="tags" name="tags" placeholder="e.g., important, monthly">
+          <label for="tag_input" class="form-label">Tags</label>
+          <input type="hidden" id="tags" name="tags" value="">
+          <div class="input-group mb-2">
+            <input type="text" class="form-control" id="tag_input" list="all-tags-list" placeholder="Add a tag">
+            <button class="btn btn-outline-secondary" type="button" id="add_tag_btn">Add</button>
+          </div>
+          <datalist id="all-tags-list">
+            {% for tag in all_tags %}
+            <option value="{{ tag }}"></option>
+            {% endfor %}
+          </datalist>
+          <div id="tag-chip-container" class="d-flex flex-wrap gap-2"></div>
+          <small class="form-text text-muted">Press Enter or click Add to create a tag.</small>
         </div>
       </fieldset>
 
@@ -113,10 +124,31 @@
     color: var(--app-muted);
     font-style: italic;
   }
+
+  .tag-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: #eef7ff;
+    border: 1px solid #cfe7ff;
+    border-radius: 999px;
+    padding: 4px 10px;
+    font-size: 0.85rem;
+  }
+
+  .tag-chip button {
+    border: none;
+    background: transparent;
+    color: #6c757d;
+    line-height: 1;
+    padding: 0;
+    cursor: pointer;
+  }
 </style>
 
 <script>
   const draftKey = 'group_new_draft';
+  let tagList = [];
 
   function escapeHtml(value) {
     return String(value)
@@ -222,6 +254,34 @@
     }
   }
 
+  function parseTags(value) {
+    return String(value || '')
+      .split(',')
+      .map(t => t.trim())
+      .filter(Boolean);
+  }
+
+  function syncTagsField() {
+    document.getElementById('tags').value = tagList.join(', ');
+  }
+
+  function renderTagChips() {
+    const container = document.getElementById('tag-chip-container');
+    container.innerHTML = tagList.map((tag, index) => (
+      `<span class="tag-chip">${escapeHtml(tag)}<button type="button" data-tag-index="${index}" aria-label="Remove ${escapeHtml(tag)}">×</button></span>`
+    )).join('');
+    syncTagsField();
+  }
+
+  function addTag(rawTag) {
+    const tag = String(rawTag || '').trim();
+    if (!tag) return;
+    const exists = tagList.some(existing => existing.toLowerCase() === tag.toLowerCase());
+    if (exists) return;
+    tagList.push(tag);
+    renderTagChips();
+  }
+
   function collectDraft() {
     return {
       handle: document.getElementById('handle').value,
@@ -255,7 +315,10 @@
       const draft = JSON.parse(raw);
       if (typeof draft.handle === 'string') document.getElementById('handle').value = draft.handle;
       if (typeof draft.display_name === 'string') document.getElementById('display_name').value = draft.display_name;
-      if (typeof draft.tags === 'string') document.getElementById('tags').value = draft.tags;
+      if (typeof draft.tags === 'string') {
+        tagList = parseTags(draft.tags);
+        renderTagChips();
+      }
       if (typeof draft.email_recipient === 'string') document.getElementById('email_recipient').value = draft.email_recipient;
       if (typeof draft.query === 'string') document.getElementById('query').value = draft.query;
       if (typeof draft.query_builder_json === 'string') document.getElementById('query_builder_json').value = draft.query_builder_json;
@@ -286,6 +349,33 @@
 
   // Check if returning from query builder
   window.addEventListener('load', () => {
+    tagList = parseTags(document.getElementById('tags').value);
+    renderTagChips();
+
+    document.getElementById('add_tag_btn').addEventListener('click', () => {
+      const input = document.getElementById('tag_input');
+      addTag(input.value);
+      input.value = '';
+      input.focus();
+    });
+
+    document.getElementById('tag_input').addEventListener('keydown', (event) => {
+      if (event.key !== 'Enter') return;
+      event.preventDefault();
+      const input = event.target;
+      addTag(input.value);
+      input.value = '';
+    });
+
+    document.getElementById('tag-chip-container').addEventListener('click', (event) => {
+      const button = event.target.closest('button[data-tag-index]');
+      if (!button) return;
+      const index = Number(button.getAttribute('data-tag-index'));
+      if (!Number.isInteger(index) || index < 0 || index >= tagList.length) return;
+      tagList.splice(index, 1);
+      renderTagChips();
+    });
+
     setOverrideMode(false);
     restoreDraft();
     const acceptedBuilderParams = sessionStorage.getItem('accepted_query_builder_params');

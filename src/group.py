@@ -55,6 +55,7 @@ class Group:
             "filter_department_ids",
             "filter_full_part_time",
             "exclude_root",
+            "direct_reports_only",
         }
         return {k: v for k, v in payload.items() if k in allowed}
 
