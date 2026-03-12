@@ -44,7 +44,8 @@ class GroupService:
         tags: List[str],
         query: Optional[str] = None,
         query_builder: Optional[dict] = None,
-        email_recipient: Optional[str] = None
+        email_recipient: Optional[str] = None,
+        output_dir: Optional[str] = None,
     ) -> Group:
         """Create a new group."""
         if not handle or not handle.replace("_", "").replace("-", "").isalnum():
@@ -65,6 +66,8 @@ class GroupService:
         }
         if email_recipient:
             config["email_recipient"] = email_recipient
+        if output_dir:
+            config["output_dir"] = output_dir
         if query_builder:
             config["query_builder"] = query_builder
 
@@ -163,7 +166,32 @@ class GroupService:
 
         # Final check
         if os.path.exists(group.folder):
-            raise Exception("Failed to delete group folder")
+            # Fallback cleanup for stubborn file handles on Windows.
+            try:
+                for root, dirs, files in os.walk(group.folder, topdown=False):
+                    for filename in files:
+                        file_path = os.path.join(root, filename)
+                        try:
+                            os.chmod(file_path, stat.S_IWRITE)
+                        except Exception:
+                            pass
+                        try:
+                            os.remove(file_path)
+                        except FileNotFoundError:
+                            pass
+                    for dirname in dirs:
+                        dir_path = os.path.join(root, dirname)
+                        try:
+                            os.chmod(dir_path, stat.S_IWRITE)
+                        except Exception:
+                            pass
+                        try:
+                            os.rmdir(dir_path)
+                        except FileNotFoundError:
+                            pass
+                os.rmdir(group.folder)
+            except Exception as exc:
+                raise Exception("Failed to delete group folder") from exc
 
     def get_all_tags(self) -> List[str]:
         """Get all unique tags across all groups."""

@@ -115,43 +115,48 @@ def init_groups_routes(app, base_path: str):
 
     @groups_bp.route("/group/new", methods=["GET", "POST"])
     def new_group():
-        """Create a new group."""
+        """Create a new group (settings first), then redirect to edit page."""
         all_tags = group_service.get_all_tags()
+        form_data = {
+            "handle": "",
+            "display_name": "",
+            "tags": "",
+            "email_recipient": "",
+            "output_dir": "",
+        }
         if request.method == "POST":
             handle = request.form.get("handle", "").strip()
-            if not validate_group_handle(handle):
-                return render_template("group_create.html", error="Invalid group handle", all_tags=all_tags)
-
             display_name = request.form.get("display_name", handle).strip()
-            tags = [t.strip() for t in request.form.get("tags", "").split(",") if t.strip()]
-            email_recipient = request.form.get("email_recipient", "").strip() or None
-            query = request.form.get("query", "").strip()
-            query_builder_raw = request.form.get("query_builder_json", "").strip()
+            tags_raw = request.form.get("tags", "").strip()
+            email_recipient = request.form.get("email_recipient", "").strip()
+            output_dir = request.form.get("output_dir", "").strip()
 
-            query_builder = None
-            if query_builder_raw:
-                try:
-                    query_builder = json.loads(query_builder_raw)
-                except json.JSONDecodeError:
-                    query_builder = None
+            form_data = {
+                "handle": handle,
+                "display_name": display_name,
+                "tags": tags_raw,
+                "email_recipient": email_recipient,
+                "output_dir": output_dir,
+            }
 
-            if not query and not query_builder:
-                return render_template("group_create.html", error="Create either Query Builder parameters or an override SQL script.", all_tags=all_tags)
+            if not validate_group_handle(handle):
+                return render_template("group_create.html", error="Invalid group handle", all_tags=all_tags, form_data=form_data)
+
+            tags = [t.strip() for t in tags_raw.split(",") if t.strip()]
 
             try:
                 group_service.create_group(
                     handle=handle,
                     display_name=display_name,
                     tags=tags,
-                    query=query,
-                    query_builder=query_builder,
-                    email_recipient=email_recipient
+                    email_recipient=email_recipient or None,
+                    output_dir=output_dir or None,
                 )
-                return redirect(url_for("groups.groups"))
+                return redirect(url_for("groups.edit_group", handle=handle))
             except ValueError as e:
-                return render_template("group_create.html", error=str(e), all_tags=all_tags)
+                return render_template("group_create.html", error=str(e), all_tags=all_tags, form_data=form_data)
 
-        return render_template("group_create.html", error=None, all_tags=all_tags)
+        return render_template("group_create.html", error=None, all_tags=all_tags, form_data=form_data)
 
     @groups_bp.route("/group/<handle>/delete", methods=["POST"])
     def delete_group(handle):

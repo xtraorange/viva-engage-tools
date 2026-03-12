@@ -429,11 +429,47 @@ def test_group_edit_renders_saved_builder_summary_without_navigation(client, app
     assert b"Group Settings" in rv.data
 
 
-def test_group_new_hides_override_editor_by_default(client):
+def test_group_new_shows_settings_only_form(client):
     rv = client.get("/group/new")
     assert rv.status_code == 200
-    assert b"Edit SQL Manually (Override)" in rv.data
-    assert b'id="override-panel" style="display: none;"' in rv.data
+    assert b"Group Details" in rv.data
+    assert b"After creating the group, you will be taken to the group page" in rv.data
+    assert b"Edit SQL Manually (Override)" not in rv.data
+
+
+def test_group_new_post_redirects_to_edit_page_without_query(client, app_workspace):
+    _, base = app_workspace
+
+    rv = client.post(
+        "/group/new",
+        data={
+            "handle": "new_group",
+            "display_name": "New Group",
+            "tags": "demo, leadership",
+            "email_recipient": "owner@example.com",
+            "output_dir": "",
+        },
+        follow_redirects=False,
+    )
+
+    assert rv.status_code == 302
+    location = rv.headers.get("Location", "")
+    assert location.endswith("/group/new_group")
+
+    cfg = yaml.safe_load((base / "groups" / "new_group" / "group.yaml").read_text(encoding="utf-8")) or {}
+    assert cfg.get("handle") == "new_group"
+    assert cfg.get("display_name") == "New Group"
+    assert cfg.get("tags") == ["demo", "leadership"]
+    assert cfg.get("email_recipient") == "owner@example.com"
+
+
+def test_delete_group_route_removes_group_folder(client, app_workspace):
+    _, base = app_workspace
+    _write_group(base, "delete_me")
+
+    rv = client.post("/group/delete_me/delete", follow_redirects=False)
+    assert rv.status_code == 302
+    assert not (base / "groups" / "delete_me").exists()
 
 
 def test_tag_edit_page_and_update(client, app_workspace):
