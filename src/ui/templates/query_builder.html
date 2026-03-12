@@ -214,13 +214,13 @@
         type,
         name: BLOCK_TYPES[type],
         attributes: {
-          job_title_display: '',
-          job_code: '',
-          job_title_text: '',
-          bu_code: '',
-          company: '',
-          tree_branch: '',
-          department_id: '',
+          job_titles_display: [],
+          job_codes: [],
+          job_title_texts: [],
+          bu_codes: [],
+          companies: [],
+          tree_branches: [],
+          department_ids: [],
         },
         direct_reports_only: false,
         root_preview_count: 0,
@@ -258,6 +258,26 @@
     };
   }
 
+  function asArray(value) {
+    if (Array.isArray(value)) {
+      return value.filter(Boolean);
+    }
+    return value ? [value] : [];
+  }
+
+  function normalizeRoleAttributes(attributes) {
+    const attrs = attributes || {};
+    return {
+      job_titles_display: asArray(attrs.job_titles_display || attrs.job_title_display),
+      job_codes: asArray(attrs.job_codes || attrs.job_code),
+      job_title_texts: asArray(attrs.job_title_texts || attrs.job_title_text || attrs.job_title),
+      bu_codes: asArray(attrs.bu_codes || attrs.bu_code),
+      companies: asArray(attrs.companies || attrs.company),
+      tree_branches: asArray(attrs.tree_branches || attrs.tree_branch),
+      department_ids: asArray(attrs.department_ids || attrs.department_id),
+    };
+  }
+
   function blockHasFilters(block) {
     const f = (block && block.filters) || {};
     return (
@@ -275,13 +295,13 @@
       return `${block.persons.length} selected person(s)`;
     }
     if (block.type === 'hierarchy_by_role') {
-      const attrs = block.attributes || {};
+      const attrs = normalizeRoleAttributes(block.attributes);
       const parts = [
-        attrs.job_title_display,
-        attrs.bu_code,
-        attrs.company,
-        attrs.tree_branch,
-        attrs.department_id,
+        ...(attrs.job_titles_display || []),
+        ...(attrs.bu_codes || []),
+        ...(attrs.companies || []),
+        ...(attrs.tree_branches || []),
+        ...(attrs.department_ids || []),
       ].filter(Boolean);
       const root = parts.length > 0 ? parts.join(' | ') : 'No role attributes selected';
       return `${root} | Root matches: ${block.root_preview_count || 0}`;
@@ -303,6 +323,36 @@
         job_title: p.job_title || '',
       }))
       .filter((p) => p.id || p.username);
+  }
+
+  function mergePersonsWithDetails(persons, details) {
+    const base = normalizePersons(persons);
+    const detailList = normalizePersons(details);
+    if (base.length === 0) {
+      return detailList;
+    }
+
+    const detailsByKey = new Map();
+    detailList.forEach((person) => {
+      const key = String(person.id || person.username || '').toLowerCase();
+      if (key) {
+        detailsByKey.set(key, person);
+      }
+    });
+
+    return base.map((person) => {
+      const key = String(person.id || person.username || '').toLowerCase();
+      const detail = key ? detailsByKey.get(key) : null;
+      if (!detail) {
+        return person;
+      }
+      return {
+        ...person,
+        first_name: person.first_name || detail.first_name || '',
+        last_name: person.last_name || detail.last_name || '',
+        job_title: person.job_title || detail.job_title || '',
+      };
+    });
   }
 
   function isUnfinishedBlock(block) {
@@ -332,7 +382,7 @@
     };
 
     if (block.type === 'hierarchy_by_person') {
-      const persons = normalizePersons(block.persons);
+      const persons = mergePersonsWithDetails(block.persons, block.selected_person_details);
       payload.persons = persons.map(p => ({
         person_id: p.id,
         person_username: p.username,
@@ -349,22 +399,21 @@
     }
 
     if (block.type === 'hierarchy_by_role') {
-      const attrs = block.attributes || {};
+      const attrs = normalizeRoleAttributes(block.attributes);
       payload.attributes = {
-        job_title_display: attrs.job_title_display || '',
-        job_code: attrs.job_code || '',
-        job_title_text: attrs.job_title_text || '',
-        job_title: attrs.job_title_text || '',
-        bu_code: attrs.bu_code || '',
-        company: attrs.company || '',
-        tree_branch: attrs.tree_branch || '',
-        department_id: attrs.department_id || '',
+        job_titles_display: attrs.job_titles_display || [],
+        job_codes: attrs.job_codes || [],
+        job_title_texts: attrs.job_title_texts || [],
+        bu_codes: attrs.bu_codes || [],
+        companies: attrs.companies || [],
+        tree_branches: attrs.tree_branches || [],
+        department_ids: attrs.department_ids || [],
       };
       payload.direct_reports_only = !!block.direct_reports_only;
     }
 
     if (block.type === 'manual_individuals') {
-      const persons = normalizePersons(block.persons);
+      const persons = mergePersonsWithDetails(block.persons, block.selected_person_details);
       payload.persons = persons.map(p => ({
         person_id: p.id,
         person_username: p.username,
@@ -421,6 +470,7 @@
             <span class="badge bg-light text-dark">${countLabel}</span>
           </div>
           <div class="mt-2 d-flex justify-content-end flex-wrap gap-1">
+            <button type="button" class="btn btn-sm btn-outline-secondary" data-action="duplicate" data-index="${index}">Duplicate</button>
             <button type="button" class="btn btn-sm btn-outline-danger" data-action="remove" data-index="${index}">Delete</button>
           </div>
         </div>
@@ -493,6 +543,25 @@
     updateSQL();
   }
 
+  function duplicateBlock(index) {
+    const source = blocks[index];
+    if (!source) return;
+
+    const cloned = JSON.parse(JSON.stringify(source));
+    cloned.id = newId();
+    cloned.last_count = null;
+    if (cloned.type === 'hierarchy_by_role') {
+      cloned.root_preview_count = 0;
+    }
+
+    blocks.splice(index + 1, 0, cloned);
+    selectedBlockIndex = index + 1;
+    markDirty();
+    renderBlocksList();
+    renderBlockEditor();
+    updateSQL();
+  }
+
   function renderTagList(containerId, values, onRemove) {
     const div = document.getElementById(containerId);
     if (!div) return;
@@ -512,43 +581,57 @@
     const list = document.getElementById(listId);
     if (!input || !list) return;
 
-    let timer = null;
+    input._employeeSearchConfig = {
+      list,
+      onPick,
+      timer: input._employeeSearchConfig ? input._employeeSearchConfig.timer : null,
+    };
+
+    if (input.dataset.employeeSearchBound === '1') {
+      return;
+    }
+    input.dataset.employeeSearchBound = '1';
+
     input.addEventListener('input', (event) => {
+      const cfg = input._employeeSearchConfig;
+      if (!cfg) return;
       const query = event.target.value.trim();
-      clearTimeout(timer);
+      clearTimeout(cfg.timer);
       if (query.length < 2) {
-        list.style.display = 'none';
+        cfg.list.style.display = 'none';
         return;
       }
 
-      timer = setTimeout(async () => {
+      cfg.timer = setTimeout(async () => {
         try {
           clearDbErrorBanner();
           const response = await fetch(`/api/search-employees?q=${encodeURIComponent(query)}`);
           const data = await response.json();
           if (data && data.error) {
             showDbErrorBanner(data.error);
-            list.style.display = 'none';
+            cfg.list.style.display = 'none';
             return;
           }
 
           if (!Array.isArray(data) || data.length === 0) {
-            list.innerHTML = '<div class="list-group-item text-muted">No results</div>';
-            list.style.display = 'block';
+            cfg.list.innerHTML = '<div class="list-group-item text-muted">No results</div>';
+            cfg.list.style.display = 'block';
             return;
           }
 
-          list.innerHTML = data.map(emp => `
+          cfg.list.innerHTML = data.map(emp => `
             <a href="#" class="list-group-item list-group-item-action" data-id="${emp.id}" data-first="${emp.first_name}" data-last="${emp.last_name}" data-username="${emp.username}" data-job-title="${emp.job_title || ''}">
               <strong>${emp.first_name} ${emp.last_name}</strong><br>
               <small>${emp.job_title || 'No title'} • ${emp.username}</small>
             </a>
           `).join('');
 
-          list.querySelectorAll('a').forEach(item => {
+          cfg.list.querySelectorAll('a').forEach(item => {
             item.addEventListener('click', (clickEvent) => {
               clickEvent.preventDefault();
-              onPick({
+              const latestCfg = input._employeeSearchConfig;
+              if (!latestCfg) return;
+              latestCfg.onPick({
                 id: item.dataset.id,
                 first_name: item.dataset.first,
                 last_name: item.dataset.last,
@@ -556,18 +639,22 @@
                 job_title: item.dataset.jobTitle || '',
               });
               input.value = '';
-              list.style.display = 'none';
+              latestCfg.list.style.display = 'none';
             });
           });
 
-          list.style.display = 'block';
+          cfg.list.style.display = 'block';
         } catch (error) {
           showDbErrorBanner(error);
         }
       }, 250);
     });
 
-    input.addEventListener('blur', () => setTimeout(() => { list.style.display = 'none'; }, 200));
+    input.addEventListener('blur', () => {
+      const cfg = input._employeeSearchConfig;
+      if (!cfg) return;
+      setTimeout(() => { cfg.list.style.display = 'none'; }, 200);
+    });
   }
 
   function wireValueSearch(inputId, listId, field, onPick) {
@@ -575,50 +662,69 @@
     const list = document.getElementById(listId);
     if (!input || !list) return;
 
-    let timer = null;
+    input._valueSearchConfig = {
+      list,
+      field,
+      onPick,
+      timer: input._valueSearchConfig ? input._valueSearchConfig.timer : null,
+    };
+
+    if (input.dataset.valueSearchBound === '1') {
+      return;
+    }
+    input.dataset.valueSearchBound = '1';
+
     input.addEventListener('input', (event) => {
+      const cfg = input._valueSearchConfig;
+      if (!cfg) return;
       const query = event.target.value.trim();
-      clearTimeout(timer);
+      clearTimeout(cfg.timer);
       if (query.length < 2) {
-        list.style.display = 'none';
+        cfg.list.style.display = 'none';
         return;
       }
 
-      timer = setTimeout(async () => {
+      cfg.timer = setTimeout(async () => {
         try {
           clearDbErrorBanner();
-          const response = await fetch(`/api/search-values?field=${field}&q=${encodeURIComponent(query)}`);
+          const response = await fetch(`/api/search-values?field=${cfg.field}&q=${encodeURIComponent(query)}`);
           const data = await response.json();
           if (data && data.error) {
             showDbErrorBanner(data.error);
-            list.style.display = 'none';
+            cfg.list.style.display = 'none';
             return;
           }
 
           if (!Array.isArray(data) || data.length === 0) {
-            list.innerHTML = '<div class="list-group-item text-muted">No results</div>';
-            list.style.display = 'block';
+            cfg.list.innerHTML = '<div class="list-group-item text-muted">No results</div>';
+            cfg.list.style.display = 'block';
             return;
           }
 
-          list.innerHTML = data.map(item => `<a href="#" class="list-group-item list-group-item-action" data-value="${item.value}">${item.value}</a>`).join('');
-          list.querySelectorAll('a').forEach(a => {
+          cfg.list.innerHTML = data.map(item => `<a href="#" class="list-group-item list-group-item-action" data-value="${item.value}">${item.value}</a>`).join('');
+          cfg.list.querySelectorAll('a').forEach(a => {
             a.addEventListener('click', (clickEvent) => {
               clickEvent.preventDefault();
-              onPick(a.dataset.value);
+              const latestCfg = input._valueSearchConfig;
+              if (!latestCfg) return;
+              latestCfg.onPick(a.dataset.value);
               input.value = '';
-              list.style.display = 'none';
+              latestCfg.list.style.display = 'none';
             });
           });
 
-          list.style.display = 'block';
+          cfg.list.style.display = 'block';
         } catch (error) {
           showDbErrorBanner(error);
         }
       }, 250);
     });
 
-    input.addEventListener('blur', () => setTimeout(() => { list.style.display = 'none'; }, 200));
+    input.addEventListener('blur', () => {
+      const cfg = input._valueSearchConfig;
+      if (!cfg) return;
+      setTimeout(() => { cfg.list.style.display = 'none'; }, 200);
+    });
   }
 
   function renderFiltersEditor(block, forceOpen = false) {
@@ -727,19 +833,27 @@
         </div>
         <div class="mb-3">
           <label for="attr-bu-code" class="form-label">Business Unit</label>
-          <input type="text" class="form-control" id="attr-bu-code" value="${attrs.bu_code || ''}">
+          <div id="attr-bu-code-tags" class="mb-2 d-flex flex-wrap gap-1"></div>
+          <input type="text" class="form-control" id="attr-bu-code" placeholder="Type to search...">
+          <div id="attr-bu-code-suggestions" class="list-group typeahead-list mt-2" style="display: none; max-height: 200px; overflow-y: auto;"></div>
         </div>
         <div class="mb-3">
           <label for="attr-company" class="form-label">Company (Country)</label>
-          <input type="text" class="form-control" id="attr-company" value="${attrs.company || ''}">
+          <div id="attr-company-tags" class="mb-2 d-flex flex-wrap gap-1"></div>
+          <input type="text" class="form-control" id="attr-company" placeholder="Type to search...">
+          <div id="attr-company-suggestions" class="list-group typeahead-list mt-2" style="display: none; max-height: 200px; overflow-y: auto;"></div>
         </div>
         <div class="mb-3">
           <label for="attr-tree-branch" class="form-label">Tree Branch</label>
-          <input type="text" class="form-control" id="attr-tree-branch" value="${attrs.tree_branch || ''}">
+          <div id="attr-tree-branch-tags" class="mb-2 d-flex flex-wrap gap-1"></div>
+          <input type="text" class="form-control" id="attr-tree-branch" placeholder="Type to search...">
+          <div id="attr-tree-branch-suggestions" class="list-group typeahead-list mt-2" style="display: none; max-height: 200px; overflow-y: auto;"></div>
         </div>
         <div class="mb-3">
           <label for="attr-department-id" class="form-label">Department ID</label>
-          <input type="text" class="form-control" id="attr-department-id" value="${attrs.department_id || ''}">
+          <div id="attr-department-id-tags" class="mb-2 d-flex flex-wrap gap-1"></div>
+          <input type="text" class="form-control" id="attr-department-id" placeholder="Type to search...">
+          <div id="attr-department-id-suggestions" class="list-group typeahead-list mt-2" style="display: none; max-height: 200px; overflow-y: auto;"></div>
         </div>
         <div class="mb-3 form-check">
           <input class="form-check-input" type="checkbox" id="role-direct-reports-only" ${block.direct_reports_only ? 'checked' : ''}>
@@ -863,13 +977,12 @@
     const toggle = document.getElementById('toggle-role-preview');
     if (!count || !list || !toggle) return;
 
-    const params = new URLSearchParams({
-      job_title: attrs.job_title_display || '',
-      bu_code: attrs.bu_code || '',
-      company: attrs.company || '',
-      tree_branch: attrs.tree_branch || '',
-      department_id: attrs.department_id || '',
-    });
+    const params = new URLSearchParams();
+    (attrs.job_titles_display || []).forEach((value) => params.append('job_title', value));
+    (attrs.bu_codes || []).forEach((value) => params.append('bu_code', value));
+    (attrs.companies || []).forEach((value) => params.append('company', value));
+    (attrs.tree_branches || []).forEach((value) => params.append('tree_branch', value));
+    (attrs.department_ids || []).forEach((value) => params.append('department_id', value));
 
     if (![...params.values()].some(v => v)) {
       block.root_preview_count = 0;
@@ -915,12 +1028,13 @@
   }
 
   function bindRoleBlockEditor(block) {
-    const attrs = block.attributes || {};
+    block.attributes = normalizeRoleAttributes(block.attributes);
+    const attrs = block.attributes;
 
-    renderTagList('attr-job-title-tags', attrs.job_title_display ? [attrs.job_title_display] : [], () => {
-      block.attributes.job_title_display = '';
-      block.attributes.job_code = '';
-      block.attributes.job_title_text = '';
+    renderTagList('attr-job-title-tags', attrs.job_titles_display || [], (idx) => {
+      block.attributes.job_titles_display.splice(idx, 1);
+      block.attributes.job_codes.splice(idx, 1);
+      block.attributes.job_title_texts.splice(idx, 1);
       markDirty();
       bindRoleBlockEditor(block);
       renderBlocksList();
@@ -930,25 +1044,46 @@
 
     wireValueSearch('attr-job-title', 'attr-job-title-suggestions', 'job_title', (value) => {
       const parsed = parseJobDisplay(value);
-      block.attributes.job_title_display = value;
-      block.attributes.job_code = parsed.code;
-      block.attributes.job_title_text = parsed.title;
-      markDirty();
-      bindRoleBlockEditor(block);
-      renderBlocksList();
-      updateRolePreview(block, false);
-      updateSQL();
-    });
-
-    [['attr-bu-code', 'bu_code'], ['attr-company', 'company'], ['attr-tree-branch', 'tree_branch'], ['attr-department-id', 'department_id']].forEach(([id, key]) => {
-      const input = document.getElementById(id);
-      input.value = attrs[key] || '';
-      input.addEventListener('input', () => {
-        block.attributes[key] = input.value.trim();
+      if (!(block.attributes.job_titles_display || []).includes(value)) {
+        block.attributes.job_titles_display.push(value);
+        block.attributes.job_codes.push(parsed.code || value);
+        block.attributes.job_title_texts.push(parsed.title || value);
         markDirty();
+        bindRoleBlockEditor(block);
         renderBlocksList();
         updateRolePreview(block, false);
         updateSQL();
+      }
+    });
+
+    [
+      ['attr-bu-code-tags', 'attr-bu-code', 'attr-bu-code-suggestions', 'bu_code', 'bu_codes'],
+      ['attr-company-tags', 'attr-company', 'attr-company-suggestions', 'company', 'companies'],
+      ['attr-tree-branch-tags', 'attr-tree-branch', 'attr-tree-branch-suggestions', 'tree_branch', 'tree_branches'],
+      ['attr-department-id-tags', 'attr-department-id', 'attr-department-id-suggestions', 'department_id', 'department_ids'],
+    ].forEach(([tagId, inputId, listId, field, key]) => {
+      const input = document.getElementById(inputId);
+      if (!input) return;
+      renderTagList(tagId, attrs[key] || [], (idx) => {
+        block.attributes[key].splice(idx, 1);
+        markDirty();
+        bindRoleBlockEditor(block);
+        renderBlocksList();
+        updateRolePreview(block, false);
+        updateSQL();
+      });
+
+      input.value = '';
+
+      wireValueSearch(inputId, listId, field, (value) => {
+        if (!(block.attributes[key] || []).includes(value)) {
+          block.attributes[key].push(value);
+          markDirty();
+          bindRoleBlockEditor(block);
+          renderBlocksList();
+          updateRolePreview(block, false);
+          updateSQL();
+        }
       });
     });
 
@@ -1222,6 +1357,8 @@
 
     if (action === 'remove') {
       removeBlock(index);
+    } else if (action === 'duplicate') {
+      duplicateBlock(index);
     }
   });
 
@@ -1248,7 +1385,7 @@
         id: block.id || newId(),
         ...createBlock(block.type || 'filtered_population'),
         ...block,
-        persons: normalizePersons(block.persons || block.selected_person_details || []),
+        persons: mergePersonsWithDetails(block.persons, block.selected_person_details),
       })) };
     }
 
@@ -1278,13 +1415,13 @@
       out.blocks.push({
         ...createBlock('hierarchy_by_role'),
         attributes: {
-          job_title_display: params.attributes_job_title_display || '',
-          job_code: params.attributes_job_code || '',
-          job_title_text: params.attributes_job_title_text || params.attributes_job_title || '',
-          bu_code: params.attributes_bu_code || '',
-          company: params.attributes_company || '',
-          tree_branch: params.attributes_tree_branch || '',
-          department_id: params.attributes_department_id || '',
+          job_titles_display: params.attributes_job_title_display ? [params.attributes_job_title_display] : [],
+          job_codes: params.attributes_job_code ? [params.attributes_job_code] : [],
+          job_title_texts: (params.attributes_job_title_text || params.attributes_job_title) ? [params.attributes_job_title_text || params.attributes_job_title] : [],
+          bu_codes: params.attributes_bu_code ? [params.attributes_bu_code] : [],
+          companies: params.attributes_company ? [params.attributes_company] : [],
+          tree_branches: params.attributes_tree_branch ? [params.attributes_tree_branch] : [],
+          department_ids: params.attributes_department_id ? [params.attributes_department_id] : [],
         },
         direct_reports_only: !!params.direct_reports_only,
         filters: {
@@ -1333,6 +1470,7 @@
         blocks = upgraded.blocks.map(block => ({
           ...createBlock(block.type || 'filtered_population'),
           ...block,
+          attributes: block.type === 'hierarchy_by_role' ? normalizeRoleAttributes(block.attributes) : block.attributes,
           id: block.id || newId(),
         }));
         selectedBlockIndex = blocks.length > 0 ? 0 : -1;

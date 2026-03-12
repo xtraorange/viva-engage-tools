@@ -345,6 +345,10 @@ def test_query_builder_routes(client, monkeypatch):
     response = client.get("/query-builder")
     assert response.status_code == 200
     assert b"Query Builder" in response.data
+    assert b"attr-bu-code-tags" in response.data
+    assert b"attr-company-tags" in response.data
+    assert b"attr-tree-branch-tags" in response.data
+    assert b"attr-department-id-tags" in response.data
 
     response = client.get("/tag/new")
     assert response.status_code == 200
@@ -357,6 +361,13 @@ def test_query_builder_routes(client, monkeypatch):
         response = client.get(f"/api/search-values?field={field}&q=test")
         assert response.status_code == 200
         assert any("UPPER" in sql for sql in called["sql"])
+
+    response = client.get(
+        "/api/preview-role-roots?bu_code=BU1&bu_code=BU2&department_id=02SA23&department_id=77ZZ99"
+    )
+    assert response.status_code == 200
+    assert any("BU_CODE IN ('BU1','BU2')" in sql for sql in called["sql"])
+    assert any("DEPARTMENT_ID IN ('02SA23','77ZZ99')" in sql for sql in called["sql"])
 
     response = client.post("/api/generate-builder-sql", json={"mode": "by_person", "person_id": "12345"})
     assert response.status_code in [200, 400]
@@ -412,6 +423,7 @@ def test_group_edit_hides_builder_summary_when_override_exists(client, app_works
     assert b"SELECT USERNAME FROM omsadm.employee_mv" in rv.data
     assert b"Group Settings" in rv.data
     assert b"Query Configuration" in rv.data
+    assert b"Edit Query" in rv.data
 
 
 def test_group_edit_renders_saved_builder_summary_without_navigation(client, app_workspace):
@@ -424,8 +436,9 @@ def test_group_edit_renders_saved_builder_summary_without_navigation(client, app
 
     rv = client.get("/group/summary_group")
     assert rv.status_code == 200
-    assert b"Builder Parameters and People Sources" in rv.data
+    assert b"Query Configuration" in rv.data
     assert b"Open Query Builder" in rv.data
+    assert b"Edit Query in Manual SQL Mode" in rv.data
     assert b"Group Settings" in rv.data
 
 
@@ -434,6 +447,7 @@ def test_group_new_shows_settings_only_form(client):
     assert rv.status_code == 200
     assert b"Group Details" in rv.data
     assert b"After creating the group, you will be taken to the group page" in rv.data
+    assert b"tag-suggestions" in rv.data
     assert b"Edit SQL Manually (Override)" not in rv.data
 
 

@@ -30,17 +30,10 @@
         <div class="mb-3">
           <label for="tag_input" class="form-label">Tags</label>
           <input type="hidden" id="tags" name="tags" value="{{ form_data.tags }}">
-          <div class="input-group mb-2">
-            <input type="text" class="form-control" id="tag_input" list="all-tags-list" placeholder="Add a tag">
-            <button class="btn btn-outline-secondary" type="button" id="add_tag_btn">Add</button>
-          </div>
-          <datalist id="all-tags-list">
-            {% for tag in all_tags %}
-            <option value="{{ tag }}"></option>
-            {% endfor %}
-          </datalist>
-          <div id="tag-chip-container" class="d-flex flex-wrap gap-2"></div>
-          <small class="form-text text-muted">Press Enter or click Add to create a tag.</small>
+          <div id="tag-chip-container" class="mb-2 d-flex flex-wrap gap-1"></div>
+          <input type="text" class="form-control" id="tag_input" placeholder="Search or add a tag...">
+          <div id="tag-suggestions" class="list-group mt-2" style="display: none; max-height: 200px; overflow-y: auto;"></div>
+          <small class="form-text text-muted">Press Enter to add a new tag if no suggestion matches.</small>
         </div>
 
         <div class="mb-3">
@@ -65,93 +58,25 @@
 </div>
 
 <style>
-  .tag-chip {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    background: #eef7ff;
-    border: 1px solid #cfe7ff;
-    border-radius: 999px;
-    padding: 4px 10px;
-    font-size: 0.85rem;
+  #tag-suggestions .list-group-item {
+    cursor: pointer;
+    font-size: 0.9rem;
   }
 
-  .tag-chip button {
-    border: none;
-    background: transparent;
-    color: #6c757d;
-    line-height: 1;
-    padding: 0;
-    cursor: pointer;
+  #tag-suggestions .list-group-item:hover {
+    background-color: #e7f1ff;
   }
 </style>
 
+<script src="{{ url_for('static', filename='js/tag_selector.js') }}"></script>
 <script>
-  let tagList = [];
-
-  function escapeHtml(value) {
-    return String(value)
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;')
-      .replace(/'/g, '&#039;');
-  }
-
-  function parseTags(value) {
-    return String(value || '')
-      .split(',')
-      .map(t => t.trim())
-      .filter(Boolean);
-  }
-
-  function syncTagsField() {
-    document.getElementById('tags').value = tagList.join(', ');
-  }
-
-  function renderTagChips() {
-    const container = document.getElementById('tag-chip-container');
-    container.innerHTML = tagList.map((tag, index) => (
-      `<span class="tag-chip">${escapeHtml(tag)}<button type="button" data-tag-index="${index}" aria-label="Remove ${escapeHtml(tag)}">x</button></span>`
-    )).join('');
-    syncTagsField();
-  }
-
-  function addTag(rawTag) {
-    const tag = String(rawTag || '').trim();
-    if (!tag) return;
-    const exists = tagList.some(existing => existing.toLowerCase() === tag.toLowerCase());
-    if (exists) return;
-    tagList.push(tag);
-    renderTagChips();
-  }
-
   document.addEventListener('DOMContentLoaded', () => {
-    tagList = parseTags(document.getElementById('tags').value);
-    renderTagChips();
-
-    document.getElementById('add_tag_btn').addEventListener('click', () => {
-      const input = document.getElementById('tag_input');
-      addTag(input.value);
-      input.value = '';
-      input.focus();
-    });
-
-    document.getElementById('tag_input').addEventListener('keydown', (event) => {
-      if (event.key !== 'Enter') return;
-      event.preventDefault();
-      const input = event.target;
-      addTag(input.value);
-      input.value = '';
-    });
-
-    document.getElementById('tag-chip-container').addEventListener('click', (event) => {
-      const button = event.target.closest('button[data-tag-index]');
-      if (!button) return;
-      const index = Number(button.getAttribute('data-tag-index'));
-      if (!Number.isInteger(index) || index < 0 || index >= tagList.length) return;
-      tagList.splice(index, 1);
-      renderTagChips();
+    TagSelector.create({
+      allTags: {{ all_tags | tojson }},
+      hiddenInputId: 'tags',
+      inputId: 'tag_input',
+      suggestionsId: 'tag-suggestions',
+      chipContainerId: 'tag-chip-container',
     });
   });
 </script>

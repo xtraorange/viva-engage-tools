@@ -42,6 +42,29 @@ def _normalize_persons(persons: list) -> list:
 
     return normalized
 
+
+def _normalize_string_list(values) -> list:
+    """Normalize a string-or-list payload to a cleaned list[str]."""
+    if values is None:
+        return []
+    if isinstance(values, list):
+        return [str(value).strip() for value in values if str(value).strip()]
+    if isinstance(values, str):
+        raw = values.strip()
+        return [raw] if raw else []
+    return []
+
+
+def _single_or_in_condition(column: str, values: list) -> str:
+    """Return SQL equality for one value, or IN (...) for multiple values."""
+    normalized = _normalize_string_list(values)
+    if not normalized:
+        return ""
+    if len(normalized) == 1:
+        return f"{column} = '{normalized[0]}'"
+    csv = ",".join([f"'{value}'" for value in normalized])
+    return f"{column} IN ({csv})"
+
 def generate_hierarchy_sql(
     mode: str,  # "by_person" or "by_role"/"by_attributes" or "all_employees"
     persons: list = None,  # list of {person_id, person_username} dicts
@@ -165,28 +188,39 @@ FROM omsadm.employee_mv cte{where_clause}"""
         root_where = "\n".join(where_parts)
         
     elif mode in ("by_attributes", "by_role"):
-        resolved_job_code = attributes_job_code or (attributes_job_title and _extract_job_code(attributes_job_title))
+        resolved_job_codes = _normalize_string_list(attributes_job_code)
+        if not resolved_job_codes:
+            resolved_job_codes = [_extract_job_code(value) for value in _normalize_string_list(attributes_job_title)]
+        resolved_bu_codes = _normalize_string_list(attributes_bu_code)
+        resolved_companies = _normalize_string_list(attributes_company)
+        resolved_tree_branches = _normalize_string_list(attributes_tree_branch)
+        resolved_department_ids = _normalize_string_list(attributes_department_id)
         if not (
-            resolved_job_code
-            or attributes_bu_code
-            or attributes_company
-            or attributes_tree_branch
-            or attributes_department_id
+            resolved_job_codes
+            or resolved_bu_codes
+            or resolved_companies
+            or resolved_tree_branches
+            or resolved_department_ids
         ):
             raise ValueError("Must provide at least one attribute for by_role mode")
         
         where_parts = ["status_code != 'T'"]
         
-        if resolved_job_code:
-            where_parts.append(f"AND JOB_CODE = '{resolved_job_code}'")
-        if attributes_bu_code:
-            where_parts.append(f"AND BU_CODE = '{attributes_bu_code}'")
-        if attributes_company:
-            where_parts.append(f"AND COMPANY = '{attributes_company}'")
-        if attributes_tree_branch:
-            where_parts.append(f"AND TREE_BRANCH = '{attributes_tree_branch}'")
-        if attributes_department_id:
-            where_parts.append(f"AND DEPARTMENT_ID = '{attributes_department_id}'")
+        job_code_condition = _single_or_in_condition("JOB_CODE", resolved_job_codes)
+        if job_code_condition:
+            where_parts.append(f"AND {job_code_condition}")
+        bu_code_condition = _single_or_in_condition("BU_CODE", resolved_bu_codes)
+        if bu_code_condition:
+            where_parts.append(f"AND {bu_code_condition}")
+        company_condition = _single_or_in_condition("COMPANY", resolved_companies)
+        if company_condition:
+            where_parts.append(f"AND {company_condition}")
+        tree_branch_condition = _single_or_in_condition("TREE_BRANCH", resolved_tree_branches)
+        if tree_branch_condition:
+            where_parts.append(f"AND {tree_branch_condition}")
+        department_id_condition = _single_or_in_condition("DEPARTMENT_ID", resolved_department_ids)
+        if department_id_condition:
+            where_parts.append(f"AND {department_id_condition}")
         
         root_where = "\n".join(where_parts)
     else:
@@ -436,33 +470,33 @@ def _block_to_sql(block: dict) -> str:
 
     if block_type == "hierarchy_by_role":
         attrs = block.get("attributes") if isinstance(block.get("attributes"), dict) else {}
-        resolved_job_code = attrs.get("job_code") or block.get("attributes_job_code")
-        resolved_job_title = attrs.get("job_title") or block.get("attributes_job_title")
-        resolved_bu_code = attrs.get("bu_code") or block.get("attributes_bu_code")
-        resolved_company = attrs.get("company") or block.get("attributes_company")
-        resolved_tree_branch = attrs.get("tree_branch") or block.get("attributes_tree_branch")
-        resolved_department_id = attrs.get("department_id") or block.get("attributes_department_id")
+        resolved_job_codes = attrs.get("job_codes") or ([attrs.get("job_code")] if attrs.get("job_code") else []) or block.get("attributes_job_codes") or block.get("attributes_job_code")
+        resolved_job_titles = attrs.get("job_titles") or attrs.get("job_title_texts") or ([attrs.get("job_title")] if attrs.get("job_title") else []) or block.get("attributes_job_titles") or block.get("attributes_job_title")
+        resolved_bu_codes = attrs.get("bu_codes") or ([attrs.get("bu_code")] if attrs.get("bu_code") else []) or block.get("attributes_bu_codes") or block.get("attributes_bu_code")
+        resolved_companies = attrs.get("companies") or ([attrs.get("company")] if attrs.get("company") else []) or block.get("attributes_companies") or block.get("attributes_company")
+        resolved_tree_branches = attrs.get("tree_branches") or ([attrs.get("tree_branch")] if attrs.get("tree_branch") else []) or block.get("attributes_tree_branches") or block.get("attributes_tree_branch")
+        resolved_department_ids = attrs.get("department_ids") or ([attrs.get("department_id")] if attrs.get("department_id") else []) or block.get("attributes_department_ids") or block.get("attributes_department_id")
 
         if not (
-            resolved_job_code
-            or resolved_job_title
-            or resolved_bu_code
-            or resolved_company
-            or resolved_tree_branch
-            or resolved_department_id
+            resolved_job_codes
+            or resolved_job_titles
+            or resolved_bu_codes
+            or resolved_companies
+            or resolved_tree_branches
+            or resolved_department_ids
         ):
             return ""
 
         return generate_hierarchy_sql(
             mode="by_role",
-            attributes_job_title=resolved_job_title,
-            attributes_job_title_display=attrs.get("job_title_display") or block.get("attributes_job_title_display"),
-            attributes_job_code=resolved_job_code,
-            attributes_job_title_text=attrs.get("job_title_text") or block.get("attributes_job_title_text"),
-            attributes_bu_code=resolved_bu_code,
-            attributes_company=resolved_company,
-            attributes_tree_branch=resolved_tree_branch,
-            attributes_department_id=resolved_department_id,
+            attributes_job_title=resolved_job_titles,
+            attributes_job_title_display=attrs.get("job_titles_display") or attrs.get("job_title_display") or block.get("attributes_job_title_display"),
+            attributes_job_code=resolved_job_codes,
+            attributes_job_title_text=resolved_job_titles,
+            attributes_bu_code=resolved_bu_codes,
+            attributes_company=resolved_companies,
+            attributes_tree_branch=resolved_tree_branches,
+            attributes_department_id=resolved_department_ids,
             direct_reports_only=bool(block.get("direct_reports_only")),
             **filters,
         )

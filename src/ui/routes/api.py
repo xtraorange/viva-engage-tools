@@ -9,6 +9,15 @@ from ...services.employee_lookup_service import EmployeeLookupService
 from ...sql_builder import generate_safe_hierarchy_sql
 from ...db import DatabaseExecutor
 
+
+def _single_or_in_condition(column: str, values: list[str]) -> str:
+    if not values:
+        return ""
+    if len(values) == 1:
+        return f"{column} = '{values[0]}'"
+    csv = ",".join([f"'{value}'" for value in values])
+    return f"{column} IN ({csv})"
+
 def init_api_routes(app, base_path: str):
     """Initialize API routes with dependencies."""
     api_bp = Blueprint('api', __name__)
@@ -122,35 +131,28 @@ def init_api_routes(app, base_path: str):
     def preview_role_roots():
         """Preview employees selected as hierarchy roots in By Role mode."""
         cfg = config_service.load_general_config()
-        job_title = request.args.get("job_title", "").strip()
-        bu_code = request.args.get("bu_code", "").strip()
-        company = request.args.get("company", "").strip()
-        tree_branch = request.args.get("tree_branch", "").strip()
-        department_id = request.args.get("department_id", "").strip()
-
-        job_title = job_title.replace("'", "''")
-        bu_code = bu_code.replace("'", "''")
-        company = company.replace("'", "''")
-        tree_branch = tree_branch.replace("'", "''")
-        department_id = department_id.replace("'", "''")
+        job_titles = [value.strip().replace("'", "''") for value in request.args.getlist("job_title") if value.strip()]
+        bu_codes = [value.strip().replace("'", "''") for value in request.args.getlist("bu_code") if value.strip()]
+        companies = [value.strip().replace("'", "''") for value in request.args.getlist("company") if value.strip()]
+        tree_branches = [value.strip().replace("'", "''") for value in request.args.getlist("tree_branch") if value.strip()]
+        department_ids = [value.strip().replace("'", "''") for value in request.args.getlist("department_id") if value.strip()]
 
         # Require at least one attribute to avoid huge unfiltered queries.
-        if not (job_title or bu_code or company or tree_branch or department_id):
+        if not (job_titles or bu_codes or companies or tree_branches or department_ids):
             return jsonify([])
 
         where_parts = ["status_code != 'T'"]
-        if job_title:
-            # Input is displayed as "CODE - TITLE"; filter roots by code.
-            job_code = job_title.split(" - ", 1)[0].strip()
-            where_parts.append(f"JOB_CODE = '{job_code}'")
-        if bu_code:
-            where_parts.append(f"BU_CODE = '{bu_code}'")
-        if company:
-            where_parts.append(f"COMPANY = '{company}'")
-        if tree_branch:
-            where_parts.append(f"TREE_BRANCH = '{tree_branch}'")
-        if department_id:
-            where_parts.append(f"DEPARTMENT_ID = '{department_id}'")
+        if job_titles:
+            job_codes = [value.split(" - ", 1)[0].strip() for value in job_titles]
+            where_parts.append(_single_or_in_condition("JOB_CODE", job_codes))
+        if bu_codes:
+            where_parts.append(_single_or_in_condition("BU_CODE", bu_codes))
+        if companies:
+            where_parts.append(_single_or_in_condition("COMPANY", companies))
+        if tree_branches:
+            where_parts.append(_single_or_in_condition("TREE_BRANCH", tree_branches))
+        if department_ids:
+            where_parts.append(_single_or_in_condition("DEPARTMENT_ID", department_ids))
 
         sql = f"""
         SELECT EMPLOYEE_ID, FIRST_NAME, LAST_NAME, USERNAME, JOB_TITLE

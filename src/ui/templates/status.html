@@ -279,9 +279,10 @@ updateStatus();
 
 document.addEventListener('DOMContentLoaded', () => {
   const reportModal = document.getElementById('reportModal');
-  const closeButton = reportModal ? reportModal.querySelector('[data-bs-dismiss="modal"]') : null;
-  if (closeButton) {
-    closeButton.addEventListener('click', closeReportModal);
+  if (reportModal) {
+    reportModal.querySelectorAll('[data-bs-dismiss="modal"]').forEach((button) => {
+      button.addEventListener('click', closeReportModal);
+    });
   }
   if (reportModal) {
     reportModal.addEventListener('click', (event) => {
@@ -290,6 +291,12 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     });
   }
+
+  document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape') {
+      closeReportModal();
+    }
+  });
 });
 </script>
 {% endblock %}

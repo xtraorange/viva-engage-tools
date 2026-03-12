@@ -150,6 +150,36 @@ def test_block_builder_role_block_with_filters():
     assert "cte.BU_CODE IN ('BU1')" in sql
 
 
+def test_by_role_mode_supports_multiple_attribute_values():
+    sql = generate_hierarchy_sql(
+        mode="by_role",
+        attributes_job_code=["000545", "000760"],
+        attributes_department_id=["02SA23", "77ZZ99"],
+        attributes_bu_code=["BU1", "BU2"],
+    )
+    assert "JOB_CODE IN ('000545','000760')" in sql
+    assert "DEPARTMENT_ID IN ('02SA23','77ZZ99')" in sql
+    assert "BU_CODE IN ('BU1','BU2')" in sql
+
+
+def test_block_builder_role_block_supports_multiple_attribute_values():
+    sql = generate_safe_hierarchy_sql(
+        blocks=[
+            {
+                "type": "hierarchy_by_role",
+                "attributes": {
+                    "job_codes": ["000545", "000760"],
+                    "department_ids": ["02SA23", "77ZZ99"],
+                    "companies": ["US", "CA"],
+                },
+            }
+        ]
+    )
+    assert "JOB_CODE IN ('000545','000760')" in sql
+    assert "DEPARTMENT_ID IN ('02SA23','77ZZ99')" in sql
+    assert "COMPANY IN ('US','CA')" in sql
+
+
 def test_block_builder_ignores_empty_manual_individuals_block():
     sql = generate_safe_hierarchy_sql(
         blocks=[

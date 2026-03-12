@@ -14,188 +14,151 @@
 <div class="alert alert-danger">{{ error }}</div>
 {% endif %}
 
-<!-- VIEW MODE -->
-<div id="view-mode-container" {% if edit_mode %}style="display: none;"{% endif %}>
-  <div class="row">
-    <!-- LEFT: Group Settings (Read-Only) -->
-    <div class="col-md-6">
-      <div class="card mb-4">
-        <div class="card-header">
-          <h5 class="mb-0">Group Settings</h5>
+<!-- Hidden form used for AJAX saves; never submitted as a traditional form -->
+<form id="group-edit-form" method="post" style="display:none;">
+  <input type="hidden" id="query_builder_json" name="query_builder_json" value='{{ config.query_builder_json | e }}'>
+  <input type="hidden" id="query_mode" name="query_mode" value="{{ config.query_mode }}">
+  <input type="hidden" id="display_name" name="display_name" value="{{ config.display_name }}">
+  <input type="hidden" id="tags" name="tags" value="{{ config.tags_str }}">
+  <input type="hidden" id="email_recipient" name="email_recipient" value="{{ config.email_recipient }}">
+  <input type="hidden" id="output_dir" name="output_dir" value="{{ config.output_dir }}">
+  <input type="hidden" id="query" name="query" value="{{ config.override_query }}">
+</form>
+
+<div class="row">
+  <!-- ===== LEFT: GROUP SETTINGS CARD ===== -->
+  <div class="col-md-6">
+
+    <!-- Settings VIEW panel -->
+    <div id="settings-view-card" class="card mb-4">
+      <div class="card-header">
+        <h5 class="mb-0">Group Settings</h5>
+      </div>
+      <div class="card-body">
+        <div class="mb-3">
+          <strong>Display Name:</strong>
+          <div class="text-muted" id="view-display-name">{{ config.display_name or group.display_name or group.handle }}</div>
         </div>
-        <div class="card-body">
-          <div class="mb-3">
-            <strong>Display Name:</strong>
-            <div class="text-muted" id="view-display-name">{{ config.display_name or group.display_name or group.handle }}</div>
-          </div>
-          <div class="mb-3">
-            <strong>Tags:</strong>
-            <div id="view-tags">
-              {% if config.tags %}
-                <div>{% for tag in config.tags %}<span class="badge bg-secondary me-1">{{ tag }}</span>{% endfor %}</div>
-              {% else %}
-                <div class="text-muted">(No tags)</div>
-              {% endif %}
-            </div>
-          </div>
-          <div class="mb-3">
-            <strong>Email Recipient:</strong>
-            <div class="text-muted" id="view-email-recipient">{{ config.email_recipient or "(Not set)" }}</div>
-          </div>
-          <div class="mb-3">
-            <strong>Output Directory Override:</strong>
-            <div class="text-muted" id="view-output-dir" style="word-break: break-word;">{{ config.output_dir or "(Using global directory)" }}</div>
-          </div>
-          <div class="d-flex justify-content-end">
-            <button type="button" class="btn btn-primary" onclick="switchToEditMode('settings')">Edit Settings</button>
+        <div class="mb-3">
+          <strong>Tags:</strong>
+          <div id="view-tags">
+            {% if config.tags %}
+              <div>{% for tag in config.tags %}<span class="badge bg-secondary me-1">{{ tag }}</span>{% endfor %}</div>
+            {% else %}
+              <div class="text-muted">(No tags)</div>
+            {% endif %}
           </div>
         </div>
+        <div class="mb-3">
+          <strong>Email Recipient:</strong>
+          <div class="text-muted" id="view-email-recipient">{{ config.email_recipient or "(Not set)" }}</div>
+        </div>
+        <div class="mb-3">
+          <strong>Output Directory Override:</strong>
+          <div class="text-muted" id="view-output-dir" style="word-break: break-word;">{{ config.output_dir or "(Using global directory)" }}</div>
+        </div>
+      </div>
+      <div class="card-footer d-flex justify-content-end">
+        <button type="button" class="btn btn-primary" onclick="openSettingsEdit()">Edit Settings</button>
       </div>
     </div>
 
-    <!-- RIGHT: Query Configuration -->
-    <div class="col-md-6">
-      <div class="card mb-4">
-        <div class="card-header">
-          <div class="d-flex justify-content-between align-items-center gap-2">
-            <h5 class="mb-0">Query Configuration</h5>
-            <div class="d-flex align-items-center gap-2">
-              <span class="small text-muted" id="current-query-mode-view"></span>
-              <button type="button" class="btn btn-outline-secondary btn-sm" id="toggle-query-mode-view" onclick="toggleQueryMode(true)"></button>
-            </div>
-          </div>
+    <!-- Settings EDIT panel -->
+    <div id="settings-edit-card" class="card mb-4" style="display:none;">
+      <div class="card-header">
+        <h5 class="mb-0">Edit Group Settings</h5>
+      </div>
+      <div class="card-body">
+        <div class="mb-3">
+          <label for="edit-display-name" class="form-label">Display Name</label>
+          <input type="text" class="form-control" id="edit-display-name">
         </div>
-        <div class="card-body">
-          <!-- Query Builder Mode (Read-Only) -->
-          <div id="query-builder-view" class="query-mode-display">
-            <div id="builder-summary" class="builder-summary-box mb-3">No query builder parameters selected yet.</div>
-            <button type="button" class="btn btn-sm btn-outline-primary" onclick="editQueryBuilder()">
-              🔨 Open Query Builder
-            </button>
+        <div class="mb-3">
+          <label class="form-label">Tags</label>
+          <div id="tag-chip-container" class="mb-2 d-flex flex-wrap gap-1"></div>
+          <input type="text" class="form-control" id="tag_input" placeholder="Search or add a tag...">
+          <div id="tag-suggestions" class="list-group mt-2" style="display: none; max-height: 200px; overflow-y: auto;"></div>
+          <small class="form-text text-muted">Press Enter to add a new tag if no suggestion matches.</small>
+        </div>
+        <div class="mb-3">
+          <label for="edit-email-recipient" class="form-label">Email Recipient</label>
+          <input type="email" class="form-control" id="edit-email-recipient">
+        </div>
+        <div class="mb-3">
+          <label for="edit-output-dir" class="form-label">Output Directory Override</label>
+          <div class="input-group">
+            <input type="text" class="form-control" id="edit-output-dir">
+            <button class="btn btn-outline-secondary" type="button" id="browse_output_dir">Browse...</button>
           </div>
-
-          <!-- Manual SQL Mode -->
-          <div id="query-manual-view" class="query-mode-display" style="display: none;">
-            <div id="query-manual-view-content">
-              {% if config.has_override_query %}
-                <pre id="manual-sql-display" class="bg-light p-3 mb-3 font-monospace" style="border-radius: 4px; max-height: 300px; overflow-y: auto; font-size: 0.85rem;">{{ config.override_query }}</pre>
-                <button type="button" class="btn btn-sm btn-outline-warning" onclick="switchToManualEditMode()">
-                  Edit SQL
-                </button>
-              {% else %}
-                <p class="text-muted mb-3">No manual SQL query defined. Click below to create one.</p>
-                <button type="button" class="btn btn-sm btn-outline-primary" onclick="switchToManualEditMode()">
-                  Create Manual SQL Query
-                </button>
-              {% endif %}
-            </div>
-          </div>
-          <div class="d-flex justify-content-end mt-3">
-            <button type="button" class="btn btn-primary" onclick="switchToEditMode('query')">Edit Query</button>
-          </div>
+          <small class="form-text text-muted">Leave empty to use the global output directory</small>
         </div>
       </div>
+      <div class="card-footer d-flex gap-2 justify-content-end">
+        <button type="button" class="btn btn-primary" id="save-settings-btn">Save Settings</button>
+        <button type="button" class="btn btn-outline-secondary" onclick="cancelSettingsEdit()">Cancel</button>
+      </div>
     </div>
+
   </div>
 
-  <div class="mt-3 d-flex justify-content-end">
-    <a href="{{ url_for('groups.groups') }}" class="btn btn-outline-secondary">Back to Groups</a>
+  <!-- ===== RIGHT: QUERY CONFIGURATION CARD ===== -->
+  <div class="col-md-6">
+
+    <!-- Query VIEW panel -->
+    <div id="query-view-card" class="card mb-4">
+      <div class="card-header">
+        <div class="d-flex justify-content-between align-items-center gap-2">
+          <h5 class="mb-0">Query Configuration</h5>
+          <button type="button" class="btn btn-outline-secondary btn-sm" id="toggle-query-mode-btn" onclick="toggleQueryMode()"></button>
+        </div>
+      </div>
+      <div class="card-body">
+        <!-- Query Builder view -->
+        <div id="query-builder-view">
+          <div id="builder-summary" class="builder-summary-box mb-3">No query builder parameters selected yet.</div>
+          <button type="button" class="btn btn-sm btn-outline-primary" onclick="editQueryBuilder()">
+            🔨 Open Query Builder
+          </button>
+        </div>
+        <!-- Manual SQL view -->
+        <div id="query-manual-view" style="display:none;">
+          <div id="query-manual-view-content">
+            {% if config.has_override_query %}
+              <pre class="bg-light p-3 mb-3 font-monospace" style="border-radius: 4px; max-height: 300px; overflow-y: auto; font-size: 0.85rem;">{{ config.override_query }}</pre>
+            {% else %}
+              <p class="text-muted mb-3">No manual SQL query defined.</p>
+            {% endif %}
+          </div>
+        </div>
+      </div>
+      <div id="query-view-footer" class="card-footer d-flex justify-content-end">
+        <button type="button" class="btn btn-primary" id="query-edit-action-btn" onclick="openQueryEdit()">{{ 'Edit Query' if config.query_mode == 'manual' else 'Edit Query in Manual SQL Mode' }}</button>
+      </div>
+    </div>
+
+    <!-- Query EDIT panel -->
+    <div id="query-edit-card" class="card mb-4" style="display:none;">
+      <div class="card-header">
+        <h5 class="mb-0">Edit Query</h5>
+      </div>
+      <div class="card-body">
+        <div class="mb-3">
+          <label for="edit-query" class="form-label">SQL Query</label>
+          <textarea class="form-control font-monospace" id="edit-query" rows="14" style="font-size: 0.85rem;" placeholder="Enter SQL query here..."></textarea>
+          <small class="form-text text-muted">This manual SQL overrides the Query Builder at runtime. Leave blank to remove the override.</small>
+        </div>
+      </div>
+      <div class="card-footer d-flex gap-2 justify-content-end">
+        <button type="button" class="btn btn-primary" id="save-query-btn">Save Query</button>
+        <button type="button" class="btn btn-outline-secondary" onclick="cancelQueryEdit()">Cancel</button>
+      </div>
+    </div>
+
   </div>
 </div>
 
-<!-- EDIT MODE -->
-<div id="edit-mode-container" {% if not edit_mode %}style="display: none;"{% endif %}>
-  <form method="post" data-unsaved-guard="true" id="group-edit-form">
-    <div class="row">
-      <!-- LEFT: Edit Group Settings -->
-      <div class="col-md-6" id="settings-edit-col">
-        <div class="card mb-4">
-          <div class="card-header">
-            <h5 class="mb-0">Group Settings</h5>
-          </div>
-          <div class="card-body">
-            <div class="mb-3">
-              <label for="display_name" class="form-label">Display Name</label>
-              <input type="text" class="form-control" id="display_name" name="display_name" value="{{ config.display_name }}">
-            </div>
-            <div class="mb-3">
-              <label for="tag_input" class="form-label">Tags</label>
-              <input type="hidden" id="tags" name="tags" value="{{ config.tags_str }}">
-              <div id="tag-chip-container" class="mb-2 d-flex flex-wrap gap-1"></div>
-              <input type="text" class="form-control" id="tag_input" placeholder="Search or add a tag...">
-              <div id="tag-suggestions" class="list-group mt-2" style="display: none; max-height: 200px; overflow-y: auto;"></div>
-              <small class="form-text text-muted">Press Enter to add a new tag if no suggestion matches.</small>
-            </div>
-            <div class="mb-3">
-              <label for="email_recipient" class="form-label">Email Recipient</label>
-              <input type="email" class="form-control" id="email_recipient" name="email_recipient" value="{{ config.email_recipient }}">
-            </div>
-            <div class="mb-3">
-              <label for="output_dir" class="form-label">Output Directory Override</label>
-              <div class="input-group">
-                <input type="text" class="form-control" id="output_dir" name="output_dir" value="{{ config.output_dir }}">
-                <button class="btn btn-outline-secondary" type="button" id="browse_output_dir">Browse...</button>
-              </div>
-              <small class="form-text text-muted">Leave empty to use the global output directory</small>
-            </div>
-          </div>
-          <div class="card-footer d-flex gap-2 justify-content-end">
-            <button type="button" class="btn btn-primary" id="save-settings-btn">Save Settings</button>
-            <button type="button" class="btn btn-outline-secondary" onclick="switchToViewMode()">Cancel</button>
-          </div>
-        </div>
-      </div>
-
-      <!-- RIGHT: Edit Query Configuration with Dual Modes -->
-      <div class="col-md-6" id="query-edit-col">
-        <div class="card mb-4">
-          <div class="card-header">
-            <div class="d-flex justify-content-between align-items-center gap-2">
-              <h5 class="mb-0">Query Configuration</h5>
-              <div class="d-flex align-items-center gap-2">
-                <span class="small text-muted" id="current-query-mode-edit"></span>
-                <button type="button" class="btn btn-outline-secondary btn-sm" id="toggle-query-mode-edit" onclick="toggleQueryMode(false)"></button>
-              </div>
-            </div>
-          </div>
-          <div class="card-body">
-            <input type="hidden" id="query_builder_json" name="query_builder_json" value='{{ config.query_builder_json | e }}'>
-            <input type="hidden" id="query_mode" name="query_mode" value="{{ config.query_mode }}">
-
-            <!-- Query Builder Edit Mode -->
-            <div id="query-builder-edit" class="query-mode-display">
-              <div class="mb-3">
-                <div class="summary-section-title">Builder Parameters and People Sources</div>
-                <div id="builder-summary-edit" class="builder-summary-box mb-3">No query builder parameters selected yet.</div>
-                <button type="button" class="btn btn-sm btn-outline-primary" id="btn-use-builder">
-                  🔨 Open Query Builder
-                </button>
-              </div>
-            </div>
-
-            <!-- Manual SQL Edit Mode -->
-            <div id="query-manual-edit" class="query-mode-display" style="display: none;">
-              <div class="mb-3">
-                <label for="query" class="form-label">SQL Query</label>
-                <textarea class="form-control font-monospace" id="query" name="query" rows="12" style="font-size: 0.85rem;" placeholder="Enter SQL query here...">{{ config.override_query }}</textarea>
-                <small class="form-text text-muted" id="manual-sql-hint">
-                  {% if config.has_override_query %}
-                    This manual SQL will override the Query Builder at runtime.
-                  {% else %}
-                    Leave blank to use Query Builder parameters. Saving here will create a manual SQL override.
-                  {% endif %}
-                </small>
-              </div>
-            </div>
-          </div>
-          <div class="card-footer d-flex gap-2 justify-content-end">
-            <button type="button" class="btn btn-primary" id="save-query-btn">Save Query</button>
-            <button type="button" class="btn btn-outline-secondary" onclick="switchToViewMode()">Cancel</button>
-          </div>
-        </div>
-      </div>
-    </div>
-  </form>
+<div class="mt-1 d-flex justify-content-end">
+  <a href="{{ url_for('groups.groups') }}" class="btn btn-outline-secondary">Back to Groups</a>
 </div>
 
 <style>
@@ -248,29 +211,24 @@
     background-color: #e7f1ff;
   }
 
-  .section-passive {
-    opacity: 0.7;
-  }
 </style>
 
+<script src="{{ url_for('static', filename='js/tag_selector.js') }}"></script>
 <script>
   const draftKey = `group_edit_draft:${window.location.pathname}`;
   const hasSavedOverride = {{ 'true' if config.has_override_query else 'false' }};
   const allTags = {{ all_tags | tojson }};
   const initialQueryMode = {{ config.query_mode | tojson }};
-  const initialDisplayName = {{ (group.display_name or group.handle) | tojson }};
   let tagList = [];
   let currentQueryMode = (initialQueryMode === 'manual' || initialQueryMode === 'builder') ? initialQueryMode : (hasSavedOverride ? 'manual' : 'builder');
-  let currentEditMode = {{ 'true' if edit_mode else 'false' }};
-  let activeEditSection = 'settings';
+  let queryEditReturnMode = null;
+  let tagSelector = null;
 
+  /* ---- utility ---- */
   function escapeHtml(value) {
     return String(value)
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;')
-      .replace(/'/g, '&#039;');
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;').replace(/'/g, '&#039;');
   }
 
   function renderTag(value) {
@@ -278,576 +236,627 @@
   }
 
   function renderRow(label, values) {
-    if (!Array.isArray(values) || values.length === 0) {
-      return '';
-    }
-    return `
-      <div class="summary-row">
-        <span class="summary-label">${escapeHtml(label)}:</span>
-        <span class="summary-tags">${values.map(renderTag).join('')}</span>
-      </div>
-    `;
+    if (!Array.isArray(values) || values.length === 0) return '';
+    return `<div class="summary-row"><span class="summary-label">${escapeHtml(label)}:</span><span class="summary-tags">${values.map(renderTag).join('')}</span></div>`;
   }
 
-  function formatBuilderSummaryHtml(params) {
+  function normalizePersons(values) {
+    if (!Array.isArray(values)) return [];
+    return values.map(person => ({
+      first_name: person.first_name || '',
+      last_name: person.last_name || '',
+      username: person.username || '',
+      user_id: person.user_id || person.id || person.person_id || '',
+    }));
+  }
+
+  function mergePersonsForSummary(persons, personDetails) {
+    const base = normalizePersons(persons);
+    const details = normalizePersons(personDetails);
+    if (base.length === 0) {
+      return details;
+    }
+
+    const detailsByKey = new Map();
+    details.forEach((person) => {
+      const key = String(person.user_id || person.username || '').toLowerCase();
+      if (key) {
+        detailsByKey.set(key, person);
+      }
+    });
+
+    return base.map((person) => {
+      const key = String(person.user_id || person.username || '').toLowerCase();
+      const detail = key ? detailsByKey.get(key) : null;
+      if (!detail) {
+        return person;
+      }
+      return {
+        ...person,
+        first_name: person.first_name || detail.first_name || '',
+        last_name: person.last_name || detail.last_name || '',
+      };
+    });
+  }
+
+  function defaultFilters() {
+    return {
+      job_titles_display: [],
+      job_codes: [],
+      bu_codes: [],
+      companies: [],
+      tree_branches: [],
+      department_ids: [],
+      full_part_time: '',
+    };
+  }
+
+  function asArray(value) {
+    if (Array.isArray(value)) return value.filter(Boolean);
+    return value ? [value] : [];
+  }
+
+  function createSummaryBlock(type) {
+    if (type === 'hierarchy_by_person') {
+      return {
+        type,
+        persons: [],
+        exclude_root: false,
+        direct_reports_only: false,
+        filters: defaultFilters(),
+      };
+    }
+    if (type === 'hierarchy_by_role') {
+      return {
+        type,
+        attributes: {
+          job_titles_display: [],
+          job_codes: [],
+          job_title_texts: [],
+          bu_codes: [],
+          companies: [],
+          tree_branches: [],
+          department_ids: [],
+        },
+        direct_reports_only: false,
+        filters: defaultFilters(),
+      };
+    }
+    if (type === 'manual_individuals') {
+      return {
+        type,
+        persons: [],
+      };
+    }
+    return {
+      type: 'filtered_population',
+      filters: defaultFilters(),
+    };
+  }
+
+  function normalizeBuilderParams(params) {
     if (!params || typeof params !== 'object') {
-      return '<div class="summary-empty">No query builder parameters selected yet.</div>';
+      return null;
     }
 
     if (Array.isArray(params.blocks)) {
-      if (params.blocks.length === 0) {
+      return {
+        version: 2,
+        blocks: params.blocks.map((block) => {
+          const normalized = {
+            ...createSummaryBlock(block.type || 'filtered_population'),
+            ...block,
+          };
+
+          normalized.persons = mergePersonsForSummary(block.persons, block.selected_person_details);
+          normalized.attributes = {
+            ...createSummaryBlock('hierarchy_by_role').attributes,
+            ...(block.attributes || {}),
+            job_titles_display: asArray(block.attributes?.job_titles_display || block.attributes?.job_title_display),
+            job_codes: asArray(block.attributes?.job_codes || block.attributes?.job_code),
+            job_title_texts: asArray(block.attributes?.job_title_texts || block.attributes?.job_title_text || block.attributes?.job_title),
+            bu_codes: asArray(block.attributes?.bu_codes || block.attributes?.bu_code),
+            companies: asArray(block.attributes?.companies || block.attributes?.company),
+            tree_branches: asArray(block.attributes?.tree_branches || block.attributes?.tree_branch),
+            department_ids: asArray(block.attributes?.department_ids || block.attributes?.department_id),
+          };
+          normalized.filters = {
+            ...defaultFilters(),
+            ...(block.filters || {}),
+          };
+          return normalized;
+        }),
+      };
+    }
+
+    if (!params.mode) {
+      return null;
+    }
+
+    const out = { version: 2, blocks: [] };
+    if (params.mode === 'by_person') {
+      out.blocks.push({
+        ...createSummaryBlock('hierarchy_by_person'),
+        persons: normalizePersons(params.selected_person_details),
+        exclude_root: !!params.exclude_root,
+        direct_reports_only: !!params.direct_reports_only,
+        filters: {
+          ...defaultFilters(),
+          job_titles_display: params.filter_job_titles_display || params.filter_job_titles || [],
+          job_codes: params.filter_job_codes || [],
+          bu_codes: params.filter_bu_codes || [],
+          companies: params.filter_companies || [],
+          tree_branches: params.filter_tree_branches || [],
+          department_ids: params.filter_department_ids || [],
+          full_part_time: params.filter_full_part_time || '',
+        },
+      });
+    } else if (params.mode === 'by_role' || params.mode === 'by_attributes') {
+      out.blocks.push({
+        ...createSummaryBlock('hierarchy_by_role'),
+        attributes: {
+          job_titles_display: params.attributes_job_title_display ? [params.attributes_job_title_display] : [],
+          job_codes: params.attributes_job_code ? [params.attributes_job_code] : [],
+          job_title_texts: (params.attributes_job_title_text || params.attributes_job_title) ? [params.attributes_job_title_text || params.attributes_job_title] : [],
+          bu_codes: params.attributes_bu_code ? [params.attributes_bu_code] : [],
+          companies: params.attributes_company ? [params.attributes_company] : [],
+          tree_branches: params.attributes_tree_branch ? [params.attributes_tree_branch] : [],
+          department_ids: params.attributes_department_id ? [params.attributes_department_id] : [],
+        },
+        direct_reports_only: !!params.direct_reports_only,
+        filters: {
+          ...defaultFilters(),
+          job_titles_display: params.filter_job_titles_display || params.filter_job_titles || [],
+          job_codes: params.filter_job_codes || [],
+          bu_codes: params.filter_bu_codes || [],
+          companies: params.filter_companies || [],
+          tree_branches: params.filter_tree_branches || [],
+          department_ids: params.filter_department_ids || [],
+          full_part_time: params.filter_full_part_time || '',
+        },
+      });
+    } else {
+      out.blocks.push({
+        ...createSummaryBlock('filtered_population'),
+        filters: {
+          ...defaultFilters(),
+          job_titles_display: params.filter_job_titles_display || params.filter_job_titles || [],
+          job_codes: params.filter_job_codes || [],
+          bu_codes: params.filter_bu_codes || [],
+          companies: params.filter_companies || [],
+          tree_branches: params.filter_tree_branches || [],
+          department_ids: params.filter_department_ids || [],
+          full_part_time: params.filter_full_part_time || '',
+        },
+      });
+    }
+
+    if (Array.isArray(params.additional_person_details) && params.additional_person_details.length > 0) {
+      out.blocks.push({
+        ...createSummaryBlock('manual_individuals'),
+        persons: normalizePersons(params.additional_person_details),
+      });
+    }
+
+    return out;
+  }
+
+  function formatBuilderSummaryHtml(params) {
+    const normalizedParams = normalizeBuilderParams(params);
+    if (!normalizedParams || typeof normalizedParams !== 'object') {
+      return '<div class="summary-empty">No query builder parameters selected yet.</div>';
+    }
+    if (Array.isArray(normalizedParams.blocks)) {
+      if (normalizedParams.blocks.length === 0) {
         return '<div class="summary-empty">No query builder parameters selected yet.</div>';
       }
-
-      const blocksHtml = params.blocks.map((block, index) => {
+      return normalizedParams.blocks.map((block, index) => {
         const type = block.type || 'unknown';
-        const labelMap = {
-          hierarchy_by_person: 'Hierarchy by Person',
-          hierarchy_by_role: 'Hierarchy by Role',
-          filtered_population: 'All Employees with Filters',
-          manual_individuals: 'Manual Individuals',
-        };
+        const labelMap = { hierarchy_by_person: 'Hierarchy by Person', hierarchy_by_role: 'Hierarchy by Role', filtered_population: 'All Employees with Filters', manual_individuals: 'Manual Individuals' };
         const title = labelMap[type] || type;
         let details = '';
-
         if (type === 'hierarchy_by_person') {
-          const people = Array.isArray(block.selected_person_details) ? block.selected_person_details : [];
-          let personHtml = people.length > 0
-            ? renderRow('Hierarchy Root Members', people.map(p => `${[p.first_name, p.last_name].filter(Boolean).join(' ')} (${p.username || 'n/a'})`))  
+          const people = Array.isArray(block.persons) ? block.persons : [];
+          details = people.length > 0
+            ? renderRow('Hierarchy Root Members', people.map(p => `${[p.first_name, p.last_name].filter(Boolean).join(' ')} (${p.username || 'n/a'})`))
             : '<div class="summary-empty">No people selected.</div>';
-          const options = [];
-          if (block.exclude_root) options.push('Exclude root person(s) from output');
-          if (block.direct_reports_only) options.push('Only direct reports');
-          const optionsHtml = options.length > 0 ? renderRow('Options', options) : '';
-          details = personHtml + optionsHtml;
+          const opts = [];
+          if (block.exclude_root) opts.push('Exclude root person(s) from output');
+          if (block.direct_reports_only) opts.push('Only direct reports');
+          if (opts.length) details += renderRow('Options', opts);
         } else if (type === 'hierarchy_by_role') {
           const attrs = block.attributes || {};
-          const attrValues = [attrs.job_title_display, attrs.bu_code, attrs.company, attrs.tree_branch, attrs.department_id].filter(Boolean);
-          let attrHtml = attrValues.length > 0
+          const roleTitleValues = (attrs.job_titles_display || []).length
+            ? attrs.job_titles_display
+            : attrs.job_codes || [];
+          const attrValues = [
+            ...roleTitleValues,
+            ...(attrs.bu_codes || []),
+            ...(attrs.companies || []),
+            ...(attrs.tree_branches || []),
+            ...(attrs.department_ids || []),
+          ].filter(Boolean);
+          details = attrValues.length > 0
             ? renderRow('Hierarchy Root Attributes', attrValues)
             : '<div class="summary-empty">No role attributes selected.</div>';
-          const options = [];
-          if (block.direct_reports_only) options.push('Only direct reports');
-          const optionsHtml = options.length > 0 ? renderRow('Options', options) : '';
-          details = attrHtml + optionsHtml;
+          if (block.direct_reports_only) details += renderRow('Options', ['Only direct reports']);
         } else if (type === 'manual_individuals') {
-          const people = Array.isArray(block.selected_person_details) ? block.selected_person_details : [];
+          const people = Array.isArray(block.persons) ? block.persons : [];
           details = people.length > 0
             ? renderRow('Individuals', people.map(p => `${[p.first_name, p.last_name].filter(Boolean).join(' ')} (${p.username || 'n/a'})`))
             : '<div class="summary-empty">No individuals selected.</div>';
         } else {
           details = '<div class="summary-empty">All active employees.</div>';
         }
-
         const filters = block.filters || {};
+        const titleFilterTags = (filters.job_titles_display || []).length
+          ? (filters.job_titles_display || [])
+          : (filters.job_codes || []);
         const filterTags = [
-          ...(filters.job_titles_display || []),
-          ...(filters.bu_codes || []),
-          ...(filters.companies || []),
-          ...(filters.tree_branches || []),
-          ...(filters.department_ids || []),
+          ...titleFilterTags, ...(filters.bu_codes || []), ...(filters.companies || []),
+          ...(filters.tree_branches || []), ...(filters.department_ids || []),
           ...(filters.full_part_time ? [`Full/Part Time: ${filters.full_part_time}`] : []),
         ];
-        const filtersHtml = filterTags.length > 0
-          ? renderRow('Filters', filterTags)
-          : '';
-
-        return `
-          <div class="builder-block-card">
-            <div class="summary-section-title">Block ${index + 1}: ${escapeHtml(title)}</div>
-            ${details}
-            ${filtersHtml}
-          </div>
-        `;
+        const filtersHtml = filterTags.length ? renderRow('Filters', filterTags) : '';
+        return `<div class="builder-block-card"><div class="summary-section-title">Block ${index + 1}: ${escapeHtml(title)}</div>${details}${filtersHtml}</div>`;
       }).join('');
-
-      return blocksHtml;
     }
-
     return '<div class="summary-empty">No query builder parameters selected yet.</div>';
   }
 
-  function switchViewMode(isViewMode) {
-    const viewContainer = document.getElementById('view-mode-container');
-    const editContainer = document.getElementById('edit-mode-container');
-    
-    if (isViewMode) {
-      viewContainer.style.display = '';
-      editContainer.style.display = 'none';
-      currentEditMode = false;
-    } else {
-      viewContainer.style.display = 'none';
-      editContainer.style.display = '';
-      currentEditMode = true;
-      tagList = parseTags(document.getElementById('tags').value);
-      renderTagChips();
-    }
+  /* ---- query mode toggle (view card only) ---- */
+  function renderQueryModeToggle() {
+    const btn = document.getElementById('toggle-query-mode-btn');
+    if (btn) btn.textContent = currentQueryMode === 'manual' ? 'Switch to Query Builder' : 'Switch to Manual SQL';
   }
 
-  function setActiveEditSection(section) {
-    activeEditSection = section === 'query' ? 'query' : 'settings';
-    const settingsCol = document.getElementById('settings-edit-col');
-    const queryCol = document.getElementById('query-edit-col');
-    if (!settingsCol || !queryCol) return;
-
-    if (activeEditSection === 'settings') {
-      settingsCol.classList.remove('section-passive');
-      queryCol.classList.add('section-passive');
-      settingsCol.querySelectorAll('input, textarea, button, select').forEach((el) => {
-        el.disabled = false;
-      });
-      queryCol.querySelectorAll('input, textarea, button, select').forEach((el) => {
-        el.disabled = true;
-      });
-    } else {
-      queryCol.classList.remove('section-passive');
-      settingsCol.classList.add('section-passive');
-      queryCol.querySelectorAll('input, textarea, button, select').forEach((el) => {
-        el.disabled = false;
-      });
-      settingsCol.querySelectorAll('input, textarea, button, select').forEach((el) => {
-        el.disabled = true;
-      });
-    }
+  function renderQueryEditAction() {
+    const btn = document.getElementById('query-edit-action-btn');
+    if (!btn) return;
+    btn.textContent = currentQueryMode === 'builder'
+      ? 'Edit Query in Manual SQL Mode'
+      : 'Edit Query';
   }
 
-  function switchToEditMode(section = 'settings') {
-    switchViewMode(false);
-    setActiveEditSection(section);
-  }
-
-  function switchToViewMode() {
-    updateViewModeValues();
-    switchViewMode(true);
-  }
-
-  function switchToManualEditMode() {
-    switchViewMode(false);
-    setActiveEditSection('query');
-    switchQueryMode('manual', false);
-  }
-
-  function renderQueryModeToggle(isViewMode) {
-    const labelEl = document.getElementById(isViewMode ? 'current-query-mode-view' : 'current-query-mode-edit');
-    const buttonEl = document.getElementById(isViewMode ? 'toggle-query-mode-view' : 'toggle-query-mode-edit');
-    if (!labelEl || !buttonEl) return;
-    const currentLabel = currentQueryMode === 'manual' ? 'Manual SQL' : 'Query Builder';
-    const targetLabel = currentQueryMode === 'manual' ? 'Query Builder' : 'Manual SQL';
-    labelEl.textContent = `Current: ${currentLabel}`;
-    buttonEl.textContent = `Switch to ${targetLabel}`;
-  }
-
-  function toggleQueryMode(isViewMode) {
+  function toggleQueryMode() {
     const nextMode = currentQueryMode === 'manual' ? 'builder' : 'manual';
-    switchQueryMode(nextMode, isViewMode, true);
+    currentQueryMode = nextMode;
+    document.getElementById('query_mode').value = nextMode;
+    applyQueryViewMode();
+    renderQueryModeToggle();
+    persistQueryModeSelection(nextMode);
   }
 
-  function switchQueryMode(mode, isViewMode, persistMode = true) {
-    currentQueryMode = mode;
-    const modeField = document.getElementById('query_mode');
-    if (modeField) {
-      modeField.value = mode;
-    }
-    
-    if (isViewMode) {
-      const builderView = document.getElementById('query-builder-view');
-      const manualView = document.getElementById('query-manual-view');
-      
-      if (mode === 'builder') {
-        builderView.style.display = '';
-        manualView.style.display = 'none';
-      } else {
-        builderView.style.display = 'none';
-        manualView.style.display = '';
-      }
+  function applyQueryViewMode() {
+    const builderView = document.getElementById('query-builder-view');
+    const manualView  = document.getElementById('query-manual-view');
+    const queryViewFooter = document.getElementById('query-view-footer');
+    const queryEditCard = document.getElementById('query-edit-card');
+    if (currentQueryMode === 'builder') {
+      builderView.style.display = '';
+      manualView.style.display  = 'none';
+      if (queryViewFooter) queryViewFooter.style.display = '';
+      // If query edit card is open, close it — builder edits go via query builder app
+      if (queryEditCard && queryEditCard.style.display !== 'none') cancelQueryEdit();
     } else {
-      const builderEdit = document.getElementById('query-builder-edit');
-      const manualEdit = document.getElementById('query-manual-edit');
-      
-      if (mode === 'builder') {
-        builderEdit.style.display = '';
-        manualEdit.style.display = 'none';
-      } else {
-        builderEdit.style.display = 'none';
-        manualEdit.style.display = '';
-      }
+      builderView.style.display = 'none';
+      manualView.style.display  = '';
+      if (queryViewFooter) queryViewFooter.style.display = '';
     }
-
-    renderQueryModeToggle(true);
-    renderQueryModeToggle(false);
-
-    if (persistMode) {
-      persistQueryModeSelection(mode);
-    }
+    renderQueryEditAction();
   }
 
   function persistQueryModeSelection(mode) {
     const payload = new URLSearchParams();
     payload.set('save_scope', 'query_mode');
     payload.set('query_mode', mode);
-
     fetch(window.location.pathname, {
       method: 'POST',
-      headers: {
-        'X-Requested-With': 'XMLHttpRequest',
-        'Content-Type': 'application/x-www-form-urlencoded',
-      },
+      headers: { 'X-Requested-With': 'XMLHttpRequest', 'Content-Type': 'application/x-www-form-urlencoded' },
       body: payload.toString(),
-    }).catch(() => {
-      // Keep UX responsive even if mode persistence fails.
-    });
+    }).catch(() => {});
   }
 
-  function getFormDataWithScope(scope) {
-    const form = document.getElementById('group-edit-form');
-    const payload = new FormData(form);
-    payload.set('save_scope', scope);
+  /* ---- settings card ---- */
+  function openSettingsEdit() {
+    // Populate edit fields from current view values
+    document.getElementById('edit-display-name').value   = document.getElementById('display_name').value;
+    document.getElementById('edit-email-recipient').value = document.getElementById('email_recipient').value;
+    document.getElementById('edit-output-dir').value     = document.getElementById('output_dir').value;
+    const tags = parseTags(document.getElementById('tags').value);
+    tagList = tags.slice();
+    if (tagSelector) {
+      tagSelector.setTags(tags);
+    }
+    document.getElementById('settings-view-card').style.display = 'none';
+    document.getElementById('settings-edit-card').style.display = '';
+  }
+
+  function cancelSettingsEdit() {
+    document.getElementById('settings-edit-card').style.display = 'none';
+    document.getElementById('settings-view-card').style.display = '';
+  }
+
+  async function saveSettings() {
+    if (tagSelector) {
+      tagList = tagSelector.getTags();
+    }
+    // Write edit-field values back into the hidden form inputs
+    document.getElementById('display_name').value    = document.getElementById('edit-display-name').value;
+    document.getElementById('email_recipient').value = document.getElementById('edit-email-recipient').value;
+    document.getElementById('output_dir').value      = document.getElementById('edit-output-dir').value;
+    document.getElementById('tags').value            = tagList.join(', ');
+
+    const payload = new FormData(document.getElementById('group-edit-form'));
+    payload.set('save_scope', 'settings');
+    payload.set('display_name', document.getElementById('edit-display-name').value);
+    payload.set('tags', document.getElementById('tags').value);
+    payload.set('email_recipient', document.getElementById('edit-email-recipient').value);
+    payload.set('output_dir', document.getElementById('edit-output-dir').value);
     payload.set('query_mode', currentQueryMode);
-    return payload;
-  }
 
-  function updateViewModeValues() {
-    const displayNameInput = document.getElementById('display_name');
-    const viewDisplayName = document.getElementById('view-display-name');
-    const viewEmail = document.getElementById('view-email-recipient');
-    const emailInput = document.getElementById('email_recipient');
-    const outputInput = document.getElementById('output_dir');
-    const viewOutput = document.getElementById('view-output-dir');
-    const viewTags = document.getElementById('view-tags');
-
-    if (viewDisplayName && displayNameInput) {
-      const displayName = (displayNameInput.value || '').trim();
-      viewDisplayName.textContent = displayName || initialDisplayName;
-    }
-
-    if (viewEmail && emailInput) {
-      const email = (emailInput.value || '').trim();
-      viewEmail.textContent = email || '(Not set)';
-    }
-
-    if (viewOutput && outputInput) {
-      const outputDir = (outputInput.value || '').trim();
-      viewOutput.textContent = outputDir || '(Using global directory)';
-    }
-
-    if (viewTags) {
-      if (tagList.length === 0) {
-        viewTags.innerHTML = '<div class="text-muted">(No tags)</div>';
-      } else {
-        viewTags.innerHTML = `<div>${tagList.map(tag => `<span class="badge bg-secondary me-1">${escapeHtml(tag)}</span>`).join('')}</div>`;
+    try {
+      const response = await fetch(window.location.pathname, {
+        method: 'POST',
+        headers: { 'X-Requested-With': 'XMLHttpRequest' },
+        body: payload,
+      });
+      const data = await response.json();
+      if (!response.ok || data.ok === false) {
+        alert(data.error || 'Unable to save settings.');
+        return;
       }
+      applyServerConfig(data.config || {});
+      cancelSettingsEdit();
+    } catch (e) {
+      alert('Error saving settings: ' + e);
     }
   }
 
-  function applyServerConfig(config) {
-    if (!config || typeof config !== 'object') return;
-    if (typeof config.display_name === 'string') {
-      document.getElementById('display_name').value = config.display_name;
-    }
-    if (Array.isArray(config.tags)) {
-      tagList = config.tags.slice();
-      renderTagChips();
-    }
-    if (typeof config.email_recipient === 'string') {
-      document.getElementById('email_recipient').value = config.email_recipient;
-    } else {
-      document.getElementById('email_recipient').value = '';
-    }
-    if (typeof config.output_dir === 'string') {
-      document.getElementById('output_dir').value = config.output_dir;
-    } else {
-      document.getElementById('output_dir').value = '';
-    }
-    if (typeof config.override_query === 'string') {
-      document.getElementById('query').value = config.override_query;
-      const manualViewContent = document.getElementById('query-manual-view-content');
-      if (manualViewContent) {
-        if (config.override_query.trim()) {
-          manualViewContent.innerHTML = `
-            <pre id="manual-sql-display" class="bg-light p-3 mb-3 font-monospace" style="border-radius: 4px; max-height: 300px; overflow-y: auto; font-size: 0.85rem;">${escapeHtml(config.override_query)}</pre>
-            <button type="button" class="btn btn-sm btn-outline-warning" onclick="switchToManualEditMode()">Edit SQL</button>
-          `;
-        } else {
-          manualViewContent.innerHTML = `
-            <p class="text-muted mb-3">No manual SQL query defined. Click below to create one.</p>
-            <button type="button" class="btn btn-sm btn-outline-primary" onclick="switchToManualEditMode()">Create Manual SQL Query</button>
-          `;
+  /* ---- query card ---- */
+  async function openQueryEdit() {
+    const editQueryField = document.getElementById('edit-query');
+    if (currentQueryMode === 'builder') {
+      const builderPayloadRaw = document.getElementById('query_builder_json').value || '{}';
+      let builderPayload = {};
+      try {
+        builderPayload = JSON.parse(builderPayloadRaw);
+      } catch (_) {
+        alert('Unable to read saved Query Builder parameters.');
+        return;
+      }
+
+      if (!builderPayload || (Array.isArray(builderPayload.blocks) && builderPayload.blocks.length === 0) || (!Array.isArray(builderPayload.blocks) && Object.keys(builderPayload).length === 0)) {
+        alert('Save Query Builder parameters first, then convert them to manual SQL.');
+        return;
+      }
+
+      try {
+        const response = await fetch('/api/generate-builder-sql', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(builderPayload),
+        });
+        const data = await response.json();
+        if (!response.ok || !data.sql) {
+          alert(data.error || 'Unable to generate SQL from Query Builder parameters.');
+          return;
         }
+
+        queryEditReturnMode = 'builder';
+        currentQueryMode = 'manual';
+        document.getElementById('query_mode').value = 'manual';
+        editQueryField.value = data.sql;
+      } catch (e) {
+        alert('Error generating SQL from Query Builder parameters: ' + e);
+        return;
       }
+    } else {
+      queryEditReturnMode = null;
+      editQueryField.value = document.getElementById('query').value;
     }
-    if (typeof config.query_builder_json === 'string') {
-      document.getElementById('query_builder_json').value = config.query_builder_json;
-      updateBuilderSummary();
-    }
-    const mode = config.query_mode === 'manual' ? 'manual' : 'builder';
-    currentQueryMode = mode;
-    switchQueryMode(mode, true, false);
-    switchQueryMode(mode, false, false);
-    setActiveEditSection(activeEditSection);
-    updateViewModeValues();
+
+    document.getElementById('query-view-card').style.display = 'none';
+    document.getElementById('query-edit-card').style.display = '';
   }
 
-  async function saveSection(scope) {
-    const payload = getFormDataWithScope(scope);
-    const response = await fetch(window.location.pathname, {
-      method: 'POST',
-      headers: {
-        'X-Requested-With': 'XMLHttpRequest',
-      },
-      body: payload,
-    });
+  function cancelQueryEdit() {
+    if (queryEditReturnMode === 'builder') {
+      currentQueryMode = 'builder';
+      document.getElementById('query_mode').value = 'builder';
+      queryEditReturnMode = null;
+    }
+    document.getElementById('query-edit-card').style.display = 'none';
+    document.getElementById('query-view-card').style.display = '';
+    applyQueryViewMode();
+    renderQueryModeToggle();
+  }
 
-    const data = await response.json();
-    if (!response.ok || data.ok === false) {
-      alert(data.error || 'Unable to save changes.');
+  async function saveQuery() {
+    const sql = document.getElementById('edit-query').value;
+    document.getElementById('query').value = sql;
+
+    const payload = new FormData(document.getElementById('group-edit-form'));
+    payload.set('save_scope', 'query');
+    payload.set('query', sql);
+    payload.set('query_mode', currentQueryMode);
+
+    try {
+      const response = await fetch(window.location.pathname, {
+        method: 'POST',
+        headers: { 'X-Requested-With': 'XMLHttpRequest' },
+        body: payload,
+      });
+      const data = await response.json();
+      if (!response.ok || data.ok === false) {
+        alert(data.error || 'Unable to save query.');
+        return;
+      }
+      queryEditReturnMode = null;
+      applyServerConfig(data.config || {});
+      cancelQueryEdit();
+    } catch (e) {
+      alert('Error saving query: ' + e);
+    }
+  }
+
+  /* ---- apply server config after save ---- */
+  function applyServerConfig(cfg) {
+    if (!cfg || typeof cfg !== 'object') return;
+
+    // Update hidden form inputs (source of truth)
+    if (typeof cfg.display_name === 'string')    document.getElementById('display_name').value    = cfg.display_name;
+    if (Array.isArray(cfg.tags))                  document.getElementById('tags').value             = cfg.tags.join(', ');
+    if (typeof cfg.email_recipient === 'string')  document.getElementById('email_recipient').value = cfg.email_recipient;
+    else                                           document.getElementById('email_recipient').value = '';
+    if (typeof cfg.output_dir === 'string')       document.getElementById('output_dir').value      = cfg.output_dir;
+    else                                           document.getElementById('output_dir').value      = '';
+    if (typeof cfg.override_query === 'string')   document.getElementById('query').value           = cfg.override_query;
+    if (typeof cfg.query_builder_json === 'string') document.getElementById('query_builder_json').value = cfg.query_builder_json;
+
+    // Update view-mode display values
+    updateSettingsViewDisplay();
+
+    // Update manual SQL pre-view
+    const manualViewContent = document.getElementById('query-manual-view-content');
+    if (manualViewContent) {
+      const sql = typeof cfg.override_query === 'string' ? cfg.override_query : document.getElementById('query').value;
+      if (sql && sql.trim()) {
+        manualViewContent.innerHTML = `<pre class="bg-light p-3 mb-3 font-monospace" style="border-radius: 4px; max-height: 300px; overflow-y: auto; font-size: 0.85rem;">${escapeHtml(sql)}</pre>`;
+      } else {
+        manualViewContent.innerHTML = `<p class="text-muted mb-3">No manual SQL query defined.</p>`;
+      }
+    }
+
+    // Update builder summary display
+    if (typeof cfg.query_builder_json === 'string') updateBuilderSummary();
+
+    // Update query mode
+    if (cfg.query_mode === 'manual' || cfg.query_mode === 'builder') {
+      currentQueryMode = cfg.query_mode;
+      document.getElementById('query_mode').value = cfg.query_mode;
+    }
+    applyQueryViewMode();
+    renderQueryModeToggle();
+  }
+
+  function updateSettingsViewDisplay() {
+    const dn = document.getElementById('display_name').value;
+    const email = document.getElementById('email_recipient').value;
+    const dir = document.getElementById('output_dir').value;
+    const tags = parseTags(document.getElementById('tags').value);
+
+    const viewDn = document.getElementById('view-display-name');
+    if (viewDn) viewDn.textContent = dn || '(Not set)';
+
+    const viewEmail = document.getElementById('view-email-recipient');
+    if (viewEmail) viewEmail.textContent = email || '(Not set)';
+
+    const viewDir = document.getElementById('view-output-dir');
+    if (viewDir) viewDir.textContent = dir || '(Using global directory)';
+
+    const viewTags = document.getElementById('view-tags');
+    if (viewTags) {
+      viewTags.innerHTML = tags.length
+        ? `<div>${tags.map(t => `<span class="badge bg-secondary me-1">${escapeHtml(t)}</span>`).join('')}</div>`
+        : '<div class="text-muted">(No tags)</div>';
+    }
+
+    // Also update page heading
+    const h1 = document.querySelector('h1');
+    if (h1) h1.textContent = dn || '{{ group.handle }}';
+  }
+
+  /* ---- builder summary ---- */
+  function updateBuilderSummary() {
+    const raw = document.getElementById('query_builder_json').value;
+    const summary = document.getElementById('builder-summary');
+    if (!summary) return;
+    if (!raw || raw === '{}') {
+      summary.textContent = 'No query builder parameters selected yet.';
       return;
     }
-
-    applyServerConfig(data.config || {});
-    sessionStorage.removeItem(draftKey);
-    const form = document.getElementById('group-edit-form');
-    if (form) {
-      form.dataset.isDirty = 'false';
+    try {
+      summary.innerHTML = formatBuilderSummaryHtml(JSON.parse(raw));
+    } catch (_) {
+      summary.textContent = 'Unable to read builder parameters.';
     }
-    switchToViewMode();
   }
 
   function editQueryBuilder() {
-    const form = document.getElementById('group-edit-form');
-    if (form) {
-      form.dataset.isDirty = 'false';
-    }
-    sessionStorage.setItem(draftKey, JSON.stringify(collectDraft()));
     sessionStorage.setItem('query_builder_initial_params', document.getElementById('query_builder_json').value || '{}');
     sessionStorage.setItem('return_to', window.location.pathname);
     window.location.href = '/query-builder';
   }
 
+  /* ---- tags ---- */
   function parseTags(value) {
-    return String(value || '')
-      .split(',')
-      .map(t => t.trim())
-      .filter(Boolean);
+    return String(value || '').split(',').map(t => t.trim()).filter(Boolean);
   }
 
-  function syncTagsField() {
-    document.getElementById('tags').value = tagList.join(', ');
-  }
-
-  function renderTagChips() {
-    const container = document.getElementById('tag-chip-container');
-    container.innerHTML = tagList.map((tag, index) => (
-      `<span class="badge bg-primary d-inline-flex align-items-center gap-1">${escapeHtml(tag)}<button type="button" class="btn-close btn-close-white" aria-label="Remove" data-tag-index="${index}" onclick="removeTag(${index}); return false;"></button></span>`
-    )).join('');
-    syncTagsField();
-  }
-
-  function addTag(rawTag) {
-    const tag = String(rawTag || '').trim();
-    if (!tag) return;
-    const exists = tagList.some(existing => existing.toLowerCase() === tag.toLowerCase());
-    if (exists) return;
-    tagList.push(tag);
-    renderTagChips();
-  }
-
-  function removeTag(index) {
-    if (index >= 0 && index < tagList.length) {
-      tagList.splice(index, 1);
-      renderTagChips();
-    }
-  }
-
-  function updateTagSuggestions(query) {
-    const suggestions = document.getElementById('tag-suggestions');
-    const normalized = String(query || '').trim().toLowerCase();
-    if (normalized.length < 1) {
-      suggestions.style.display = 'none';
-      return;
-    }
-
-    const matches = allTags.filter(tag => {
-      if (tagList.some(existing => existing.toLowerCase() === tag.toLowerCase())) {
-        return false;
-      }
-      return tag.toLowerCase().includes(normalized);
-    }).slice(0, 10);
-
-    if (matches.length === 0) {
-      suggestions.innerHTML = '<div class="list-group-item text-muted">Press Enter to add this tag</div>';
-      suggestions.style.display = 'block';
-      return;
-    }
-
-    suggestions.innerHTML = matches.map(tag => (
-      `<a href="#" class="list-group-item list-group-item-action" data-tag="${escapeHtml(tag)}">${escapeHtml(tag)}</a>`
-    )).join('');
-
-    suggestions.querySelectorAll('a').forEach(item => {
-      item.addEventListener('click', (event) => {
-        event.preventDefault();
-        addTag(item.getAttribute('data-tag'));
-        document.getElementById('tag_input').value = '';
-        suggestions.style.display = 'none';
-      });
-    });
-
-    suggestions.style.display = 'block';
-  }
-
-  function collectDraft() {
-    return {
-      display_name: document.getElementById('display_name').value,
-      tags: document.getElementById('tags').value,
-      email_recipient: document.getElementById('email_recipient').value,
-      output_dir: document.getElementById('output_dir').value,
-      query: document.getElementById('query').value,
-      query_builder_json: document.getElementById('query_builder_json').value,
-    };
-  }
-
-  function updateBuilderSummary() {
-    const summaries = [
-      { id: 'builder-summary' },
-      { id: 'builder-summary-edit' }
-    ];
-
-    const raw = document.getElementById('query_builder_json').value;
-    
-    summaries.forEach(({ id }) => {
-      const summary = document.getElementById(id);
-      if (!summary) return;
-      
-      if (!raw || raw === '{}') {
-        summary.textContent = 'No query builder parameters selected yet.';
-        return;
-      }
-      try {
-        const params = JSON.parse(raw);
-        summary.innerHTML = formatBuilderSummaryHtml(params);
-      } catch (_) {
-        summary.textContent = 'Unable to read builder parameters.';
-      }
-    });
-  }
-
-  function restoreDraft() {
-    const raw = sessionStorage.getItem(draftKey);
-    if (!raw) return;
-    try {
-      const draft = JSON.parse(raw);
-      if (typeof draft.display_name === 'string') document.getElementById('display_name').value = draft.display_name;
-      if (typeof draft.tags === 'string') {
-        tagList = parseTags(draft.tags);
-        renderTagChips();
-      }
-      if (typeof draft.email_recipient === 'string') document.getElementById('email_recipient').value = draft.email_recipient;
-      if (typeof draft.output_dir === 'string') document.getElementById('output_dir').value = draft.output_dir;
-      if (typeof draft.query === 'string') document.getElementById('query').value = draft.query;
-      if (typeof draft.query_builder_json === 'string') document.getElementById('query_builder_json').value = draft.query_builder_json;
-    } catch (_) {}
-    updateBuilderSummary();
-  }
-
+  /* ---- init ---- */
   window.addEventListener('load', () => {
-    if (currentEditMode) {
-      tagList = parseTags(document.getElementById('tags').value);
-      renderTagChips();
-      setActiveEditSection('settings');
-    }
-
-    const tagInput = document.getElementById('tag_input');
-    if (tagInput) {
-      tagInput.addEventListener('input', (event) => {
-        updateTagSuggestions(event.target.value);
-      });
-
-      tagInput.addEventListener('keydown', (event) => {
-        if (event.key !== 'Enter') return;
-        event.preventDefault();
-        addTag(tagInput.value);
-        tagInput.value = '';
-        document.getElementById('tag-suggestions').style.display = 'none';
-      });
-
-      tagInput.addEventListener('blur', () => {
-        setTimeout(() => {
-          document.getElementById('tag-suggestions').style.display = 'none';
-        }, 150);
-      });
-    }
-
-    const browseBtn = document.getElementById('browse_output_dir');
-    if (browseBtn) {
-      browseBtn.addEventListener('click', async function() {
-        try {
-          const response = await fetch('/api/pick-folder');
-          const data = await response.json();
-          if (data.path) {
-            document.getElementById('output_dir').value = data.path;
-          }
-        } catch (error) {
-          alert('Error opening folder picker: ' + error);
-        }
-      });
-    }
-
-    const builderBtn = document.getElementById('btn-use-builder');
-    if (builderBtn) {
-      builderBtn.addEventListener('click', (e) => {
-        e.preventDefault();
-        editQueryBuilder();
-      });
-    }
-
-    switchQueryMode(currentQueryMode, true, false);
-    switchQueryMode(currentQueryMode, false, false);
-    restoreDraft();
+    // Set up query card footer visibility (Edit Query button only appears in manual mode)
+    applyQueryViewMode();
+    renderQueryModeToggle();
     updateBuilderSummary();
-    
+    updateSettingsViewDisplay();
+
+    // Handle return from query builder
     const acceptedBuilderParams = sessionStorage.getItem('accepted_query_builder_params');
     if (acceptedBuilderParams) {
       document.getElementById('query_builder_json').value = acceptedBuilderParams;
-      updateBuilderSummary();
       sessionStorage.removeItem('accepted_query_builder_params');
+      updateBuilderSummary();
+      // Auto-save the accepted params
+      const payload = new FormData(document.getElementById('group-edit-form'));
+      payload.set('save_scope', 'query');
+      payload.set('query', '');
+      payload.set('query_mode', 'builder');
+      fetch(window.location.pathname, {
+        method: 'POST',
+        headers: { 'X-Requested-With': 'XMLHttpRequest' },
+        body: payload,
+      }).then(r => r.json()).then(d => { if (d.config) applyServerConfig(d.config); }).catch(() => {});
     }
-    
+
     const acceptedOverrideQuery = sessionStorage.getItem('accepted_query_sql');
     if (acceptedOverrideQuery) {
       document.getElementById('query').value = acceptedOverrideQuery;
-      switchViewMode(false);
-      setActiveEditSection('query');
-      switchQueryMode('manual', false);
       sessionStorage.removeItem('accepted_query_sql');
+      document.getElementById('edit-query').value = acceptedOverrideQuery;
+      openQueryEdit();
     }
 
-    const form = document.getElementById('group-edit-form');
-    if (form) {
-      form.addEventListener('submit', (event) => {
-        event.preventDefault();
-        saveSection('all');
+    tagSelector = TagSelector.create({
+      allTags,
+      hiddenInputId: 'tags',
+      inputId: 'tag_input',
+      suggestionsId: 'tag-suggestions',
+      chipContainerId: 'tag-chip-container',
+      onChange: (tags) => {
+        tagList = tags.slice();
+      },
+    });
+
+    // Browse button
+    const browseBtn = document.getElementById('browse_output_dir');
+    if (browseBtn) {
+      browseBtn.addEventListener('click', async () => {
+        try {
+          const data = await fetch('/api/pick-folder').then(r => r.json());
+          if (data.path) document.getElementById('edit-output-dir').value = data.path;
+        } catch (e) { alert('Error opening folder picker: ' + e); }
       });
     }
 
+    // Save button wiring
     const saveSettingsBtn = document.getElementById('save-settings-btn');
-    if (saveSettingsBtn) {
-      saveSettingsBtn.addEventListener('click', () => {
-        saveSection('settings');
-      });
-    }
+    if (saveSettingsBtn) saveSettingsBtn.addEventListener('click', saveSettings);
 
     const saveQueryBtn = document.getElementById('save-query-btn');
-    if (saveQueryBtn) {
-      saveQueryBtn.addEventListener('click', () => {
-        saveSection('query');
-      });
-    }
-
-    if (form) {
-      form.addEventListener('reset', () => {
-        sessionStorage.removeItem(draftKey);
-      });
-    }
+    if (saveQueryBtn) saveQueryBtn.addEventListener('click', saveQuery);
   });
 </script>
+
 {% endblock %}
