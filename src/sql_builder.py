@@ -358,6 +358,172 @@ UNION
     return final_query
 
 
+def _block_filters(block: dict) -> dict:
+    """Extract normalized filter payload from a block."""
+    filters = block.get("filters") if isinstance(block.get("filters"), dict) else {}
+
+    job_titles_display = filters.get("job_titles_display")
+    if not isinstance(job_titles_display, list) or not job_titles_display:
+        job_titles_display = block.get("filter_job_titles_display") or []
+
+    job_codes = filters.get("job_codes")
+    if not isinstance(job_codes, list):
+        job_codes = block.get("filter_job_codes") or []
+    if not job_codes and job_titles_display:
+        job_codes = [_extract_job_code(v) for v in job_titles_display if isinstance(v, str) and v.strip()]
+
+    return {
+        "filter_job_titles": job_titles_display,
+        "filter_job_codes": job_codes,
+        "filter_job_titles_display": job_titles_display,
+        "filter_bu_codes": filters.get("bu_codes") if isinstance(filters.get("bu_codes"), list) else (block.get("filter_bu_codes") or []),
+        "filter_companies": filters.get("companies") if isinstance(filters.get("companies"), list) else (block.get("filter_companies") or []),
+        "filter_tree_branches": filters.get("tree_branches") if isinstance(filters.get("tree_branches"), list) else (block.get("filter_tree_branches") or []),
+        "filter_department_ids": filters.get("department_ids") if isinstance(filters.get("department_ids"), list) else (block.get("filter_department_ids") or []),
+        "filter_full_part_time": filters.get("full_part_time") or block.get("filter_full_part_time"),
+    }
+
+
+def _block_label(block_type: str) -> str:
+    labels = {
+        "hierarchy_by_person": "Hierarchy by person",
+        "hierarchy_by_role": "Hierarchy by role",
+        "filtered_population": "All employees with filters",
+        "manual_individuals": "Manual individuals",
+    }
+    return labels.get(block_type, block_type or "Block")
+
+
+def _manual_individuals_sql(persons: list) -> str:
+    normalized = _normalize_persons(persons)
+    if not normalized:
+        return ""
+
+    conditions = []
+    for person in normalized:
+        if person.get("person_username"):
+            conditions.append(f"USERNAME = '{person.get('person_username')}'")
+        elif person.get("person_id"):
+            conditions.append(f"EMPLOYEE_ID = '{person.get('person_id')}'")
+
+    if not conditions:
+        return ""
+
+    return f"""SELECT USERNAME
+FROM omsadm.employee_mv
+WHERE status_code != 'T'
+  AND ({' OR '.join(conditions)})"""
+
+
+def _block_to_sql(block: dict) -> str:
+    block_type = block.get("type")
+    if not block_type:
+        raise ValueError("Each query block requires a type")
+
+    filters = _block_filters(block)
+
+    if block_type == "hierarchy_by_person":
+        persons = block.get("persons") or block.get("selected_person_details") or []
+        if not _normalize_persons(persons):
+            return ""
+        return generate_hierarchy_sql(
+            mode="by_person",
+            persons=persons,
+            exclude_root=bool(block.get("exclude_root")),
+            direct_reports_only=bool(block.get("direct_reports_only")),
+            **filters,
+        )
+
+    if block_type == "hierarchy_by_role":
+        attrs = block.get("attributes") if isinstance(block.get("attributes"), dict) else {}
+        resolved_job_code = attrs.get("job_code") or block.get("attributes_job_code")
+        resolved_job_title = attrs.get("job_title") or block.get("attributes_job_title")
+        resolved_bu_code = attrs.get("bu_code") or block.get("attributes_bu_code")
+        resolved_company = attrs.get("company") or block.get("attributes_company")
+        resolved_tree_branch = attrs.get("tree_branch") or block.get("attributes_tree_branch")
+        resolved_department_id = attrs.get("department_id") or block.get("attributes_department_id")
+
+        if not (
+            resolved_job_code
+            or resolved_job_title
+            or resolved_bu_code
+            or resolved_company
+            or resolved_tree_branch
+            or resolved_department_id
+        ):
+            return ""
+
+        return generate_hierarchy_sql(
+            mode="by_role",
+            attributes_job_title=resolved_job_title,
+            attributes_job_title_display=attrs.get("job_title_display") or block.get("attributes_job_title_display"),
+            attributes_job_code=resolved_job_code,
+            attributes_job_title_text=attrs.get("job_title_text") or block.get("attributes_job_title_text"),
+            attributes_bu_code=resolved_bu_code,
+            attributes_company=resolved_company,
+            attributes_tree_branch=resolved_tree_branch,
+            attributes_department_id=resolved_department_id,
+            direct_reports_only=bool(block.get("direct_reports_only")),
+            **filters,
+        )
+
+    if block_type == "filtered_population":
+        return generate_hierarchy_sql(
+            mode="all_employees",
+            **filters,
+        )
+
+    if block_type == "manual_individuals":
+        people = block.get("persons") or block.get("selected_person_details") or []
+        return _manual_individuals_sql(people)
+
+    raise ValueError(f"Unsupported block type: {block_type}")
+
+
+def generate_blocks_sql(blocks: list) -> str:
+    """Generate SQL from ordered query blocks using UNION de-duplication."""
+    if not isinstance(blocks, list) or len(blocks) == 0:
+        raise ValueError("At least one block is required")
+
+    preamble_comments = []
+    parts = []
+    for index, block in enumerate(blocks, start=1):
+        if not isinstance(block, dict):
+            raise ValueError("Each block must be an object")
+        block_type = block.get("type")
+        label = block.get("name") or _block_label(block_type)
+        block_sql = _block_to_sql(block)
+        if not block_sql or not str(block_sql).strip():
+            preamble_comments.append(
+                f"-- Block {index}: {label} (skipped: no qualifying selections)"
+            )
+            continue
+        parts.append(f"-- Block {index}: {label}\n{block_sql}")
+
+    if len(parts) == 0:
+        comment_prefix = "\n".join(preamble_comments)
+        if comment_prefix:
+            comment_prefix += "\n"
+        return f"{comment_prefix}SELECT USERNAME FROM omsadm.employee_mv WHERE 1=0"
+
+    if len(parts) == 1:
+        comment_prefix = "\n".join(preamble_comments)
+        if comment_prefix:
+            comment_prefix += "\n"
+        return f"{comment_prefix}{parts[0]}"
+
+    comment_prefix = "\n".join(preamble_comments)
+    if comment_prefix:
+        comment_prefix += "\n"
+    return f"""SELECT DISTINCT merged.USERNAME
+FROM (
+{('\nUNION\n').join(parts)}
+) merged""" if not comment_prefix else f"""{comment_prefix}SELECT DISTINCT merged.USERNAME
+FROM (
+{('\nUNION\n').join(parts)}
+) merged"""
+
+
 def generate_safe_hierarchy_sql(**kwargs) -> str:
     """
     Generate hierarchy SQL with basic injection prevention.
@@ -374,5 +540,8 @@ def generate_safe_hierarchy_sql(**kwargs) -> str:
 
     # Basic sanitization: escape single quotes while preserving shapes
     kwargs = {key: sanitize(value) for key, value in kwargs.items()}
-    
+
+    if "blocks" in kwargs:
+        return generate_blocks_sql(kwargs.get("blocks"))
+
     return generate_hierarchy_sql(**kwargs)

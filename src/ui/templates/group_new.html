@@ -10,7 +10,7 @@
 {% if error %}
 <div class="alert alert-danger">{{ error }}</div>
 {% endif %}
-<form method="post">
+<form method="post" data-unsaved-guard="true">
   <div class="row">
     <div class="col-md-6">
       <fieldset class="mb-4">
@@ -178,6 +178,67 @@
   function formatBuilderSummaryHtml(params) {
     if (!params || typeof params !== 'object') {
       return '<div class="summary-empty">No query builder parameters selected yet.</div>';
+    }
+
+    if (Array.isArray(params.blocks)) {
+      if (params.blocks.length === 0) {
+        return '<div class="summary-empty">No query builder parameters selected yet.</div>';
+      }
+
+      const blocksHtml = params.blocks.map((block, index) => {
+        const type = block.type || 'unknown';
+        const labelMap = {
+          hierarchy_by_person: 'Hierarchy by Person',
+          hierarchy_by_role: 'Hierarchy by Role',
+          filtered_population: 'All Employees with Filters',
+          manual_individuals: 'Manual Individuals',
+        };
+        const title = labelMap[type] || type;
+        let details = '';
+
+        if (type === 'hierarchy_by_person') {
+          const people = Array.isArray(block.selected_person_details) ? block.selected_person_details : [];
+          details = people.length > 0
+            ? renderRow('People', people.map(p => `${[p.first_name, p.last_name].filter(Boolean).join(' ')} (${p.username || 'n/a'})`))
+            : '<div class="summary-empty">No people selected.</div>';
+        } else if (type === 'hierarchy_by_role') {
+          const attrs = block.attributes || {};
+          const attrValues = [attrs.job_title_display, attrs.bu_code, attrs.company, attrs.tree_branch, attrs.department_id].filter(Boolean);
+          details = attrValues.length > 0
+            ? renderRow('Attributes', attrValues)
+            : '<div class="summary-empty">No role attributes selected.</div>';
+        } else if (type === 'manual_individuals') {
+          const people = Array.isArray(block.selected_person_details) ? block.selected_person_details : [];
+          details = people.length > 0
+            ? renderRow('Individuals', people.map(p => `${[p.first_name, p.last_name].filter(Boolean).join(' ')} (${p.username || 'n/a'})`))
+            : '<div class="summary-empty">No individuals selected.</div>';
+        } else {
+          details = '<div class="summary-empty">All active employees.</div>';
+        }
+
+        const filters = block.filters || {};
+        const filterTags = [
+          ...(filters.job_titles_display || []),
+          ...(filters.bu_codes || []),
+          ...(filters.companies || []),
+          ...(filters.tree_branches || []),
+          ...(filters.department_ids || []),
+          ...(filters.full_part_time ? [`Full/Part Time: ${filters.full_part_time}`] : []),
+        ];
+        const filtersHtml = filterTags.length > 0
+          ? renderRow('Filters', filterTags)
+          : '<div class="summary-empty">No filters.</div>';
+
+        return `
+          <div class="summary-row">
+            <div class="summary-section-title">Block ${index + 1}: ${escapeHtml(title)}</div>
+            ${details}
+            ${filtersHtml}
+          </div>
+        `;
+      }).join('');
+
+      return `<div class="summary-section-title">People Sources (combined)</div>${blocksHtml}`;
     }
 
     const mode = params.mode || 'by_person';

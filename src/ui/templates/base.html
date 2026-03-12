@@ -704,6 +704,32 @@
           panel.classList.toggle('show');
         });
       }
+
+      // Warn before leaving pages with unsaved changes on forms explicitly marked for guard.
+      const guardedForms = Array.from(document.querySelectorAll('form[data-unsaved-guard="true"]'));
+      guardedForms.forEach((form) => {
+        form.dataset.isDirty = 'false';
+        form.querySelectorAll('input, textarea, select').forEach((field) => {
+          field.addEventListener('input', () => {
+            form.dataset.isDirty = 'true';
+          });
+          field.addEventListener('change', () => {
+            form.dataset.isDirty = 'true';
+          });
+        });
+        form.addEventListener('submit', () => {
+          form.dataset.isDirty = 'false';
+        });
+      });
+
+      window.addEventListener('beforeunload', (event) => {
+        const hasDirtyForm = guardedForms.some((form) => form.dataset.isDirty === 'true');
+        if (!hasDirtyForm) {
+          return;
+        }
+        event.preventDefault();
+        event.returnValue = '';
+      });
     });
   </script>
 

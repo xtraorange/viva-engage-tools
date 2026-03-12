@@ -344,7 +344,7 @@ def test_query_builder_routes(client, monkeypatch):
 
     response = client.get("/query-builder")
     assert response.status_code == 200
-    assert b"SQL Query Builder" in response.data
+    assert b"Query Builder" in response.data
 
     response = client.get("/tag/new")
     assert response.status_code == 200
@@ -425,7 +425,7 @@ def test_group_edit_renders_saved_builder_summary_without_navigation(client, app
 
     rv = client.get("/group/summary_group")
     assert rv.status_code == 200
-    assert b"Builder Method and Parameters" in rv.data
+    assert b"Builder Parameters and People Sources" in rv.data
     assert b"Edit SQL Manually (Override)" in rv.data
     assert b'id="override-panel" style="display: none;"' in rv.data
 

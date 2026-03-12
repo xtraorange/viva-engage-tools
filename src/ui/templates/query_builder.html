@@ -1,279 +1,177 @@
 {% extends "base.html" %}
 
-{% block title %}SQL Query Builder{% endblock %}
+{% block title %}Query Builder{% endblock %}
 
 {% block content %}
 
 <div class="d-flex justify-content-between align-items-center mb-4">
-  <h1>SQL Query Builder</h1>
+  <h1>Query Builder</h1>
 </div>
 
 <div id="db-error-banner" class="alert alert-danger" style="display: none;"></div>
 
 <div class="row">
   <div class="col-lg-8">
-    <!-- STEP 1: Define Employee Pool -->
-    <div class="card mb-4">
-      <div class="card-header bg-primary text-white">
-        <h5 class="mb-0">Step 1: Define Employee Pool</h5>
-        <small>Choose the starting population from the employee table</small>
+    <div class="card mb-3">
+      <div class="card-header">
+        <div>
+          <h5 class="mb-0">People Source Blocks</h5>
+          <small class="text-muted">Add one or more sources and arrange them in your preferred order.</small>
+        </div>
       </div>
       <div class="card-body">
-        <ul class="nav nav-tabs" role="tablist">
-          <li class="nav-item" role="presentation">
-            <button class="nav-link active" id="by-person-tab" data-bs-toggle="tab" data-bs-target="#by-person" type="button" role="tab" aria-controls="by-person" aria-selected="true">
-              By Person
-            </button>
-          </li>
-          <li class="nav-item" role="presentation">
-            <button class="nav-link" id="by-role-tab" data-bs-toggle="tab" data-bs-target="#by-role" type="button" role="tab" aria-controls="by-role" aria-selected="false">
-              By Role
-            </button>
-          </li>
-          <li class="nav-item" role="presentation">
-            <button class="nav-link" id="all-employees-tab" data-bs-toggle="tab" data-bs-target="#all-employees" type="button" role="tab" aria-controls="all-employees" aria-selected="false">
-              All Employees
-            </button>
-          </li>
-        </ul>
-
-        <div class="tab-content pt-3">
-          <!-- By Person Tab -->
-          <div class="tab-pane fade show active" id="by-person" role="tabpanel" aria-labelledby="by-person-tab">
-            <div class="mb-3">
-              <label for="person-search" class="form-label">Find Employee(s)</label>
-              <div id="person-tags" class="mb-2 d-flex flex-wrap gap-1"></div>
-              <input type="text" class="form-control" id="person-search" placeholder="Search by ID, name, or username...">
-              <div id="person-suggestions" class="list-group mt-2" style="display: none; max-height: 200px; overflow-y: auto;"></div>
-            </div>
-            <div class="mb-2">
-              <label class="form-label mb-1">Options</label>
-              <div class="form-check">
-                <input class="form-check-input" type="checkbox" id="person-exclude-root">
-                <label class="form-check-label" for="person-exclude-root">
-                  Exclude the selected person(s) from results
-                </label>
-              </div>
-              <div class="form-check mt-2">
-                <input class="form-check-input" type="checkbox" id="person-direct-reports-only">
-                <label class="form-check-label" for="person-direct-reports-only">
-                  Only Direct Reports
-                </label>
-              </div>
+        <div class="card border-light bg-light mb-3">
+          <div class="card-body p-2">
+            <div class="d-flex flex-wrap align-items-center gap-2">
+              <label for="add-block-select" class="form-label mb-0">Add source blocks</label>
+              <select id="add-block-select" class="form-select form-select-sm" style="max-width: 280px;">
+            <option value="hierarchy_by_person">Hierarchy by Person</option>
+            <option value="hierarchy_by_role">Hierarchy by Role</option>
+            <option value="filtered_population">All Employees with Filters</option>
+            <option value="manual_individuals">Manual Individuals</option>
+              </select>
+              <button type="button" class="btn btn-sm btn-primary" id="btn-add-block">Add Block</button>
             </div>
           </div>
-
-          <!-- By Role Tab -->
-          <div class="tab-pane fade" id="by-role" role="tabpanel" aria-labelledby="by-role-tab">
-            <p class="text-muted small mb-3">Find people with these attributes, then build their hierarchy</p>
-            <div class="mb-3">
-              <label for="attr-job-title" class="form-label">Job Title(s)/Job Code(s)</label>
-              <div id="attr-job-title-tags" class="mb-2 d-flex flex-wrap gap-1"></div>
-              <input type="text" class="form-control" id="attr-job-title" placeholder="Type to search...">
-              <div id="attr-job-title-suggestions" class="list-group mt-2" style="display: none; max-height: 200px; overflow-y: auto;"></div>
-            </div>
-            <div class="mb-3">
-              <label for="attr-bu-code" class="form-label">Business Unit(s)</label>
-              <div id="attr-bu-code-tags" class="mb-2 d-flex flex-wrap gap-1"></div>
-              <input type="text" class="form-control" id="attr-bu-code" placeholder="Type to search...">
-              <div id="attr-bu-code-suggestions" class="list-group mt-2" style="display: none; max-height: 200px; overflow-y: auto;"></div>
-            </div>
-            <div class="mb-3">
-              <label for="attr-company" class="form-label">Companies (Countries)</label>
-              <div id="attr-company-tags" class="mb-2 d-flex flex-wrap gap-1"></div>
-              <input type="text" class="form-control" id="attr-company" placeholder="Type to search...">
-              <div id="attr-company-suggestions" class="list-group mt-2" style="display: none; max-height: 200px; overflow-y: auto;"></div>
-            </div>
-            <div class="mb-3">
-              <label for="attr-tree-branch" class="form-label">Tree Branch(es)</label>
-              <div id="attr-tree-branch-tags" class="mb-2 d-flex flex-wrap gap-1"></div>
-              <input type="text" class="form-control" id="attr-tree-branch" placeholder="Type to search...">
-              <div id="attr-tree-branch-suggestions" class="list-group mt-2" style="display: none; max-height: 200px; overflow-y: auto;"></div>
-            </div>
-            <div class="mb-3">
-              <label for="attr-department-id" class="form-label">Department ID(s)</label>
-              <div id="attr-department-id-tags" class="mb-2 d-flex flex-wrap gap-1"></div>
-              <input type="text" class="form-control" id="attr-department-id" placeholder="Type to search...">
-              <div id="attr-department-id-suggestions" class="list-group mt-2" style="display: none; max-height: 200px; overflow-y: auto;"></div>
-            </div>
-            <div class="mb-3">
-              <label class="form-label mb-1">Options</label>
-              <div class="form-check">
-                <input class="form-check-input" type="checkbox" id="role-direct-reports-only">
-                <label class="form-check-label" for="role-direct-reports-only">
-                  Only Direct Reports
-                </label>
-              </div>
-            </div>
-            <div class="card border-light bg-light mt-3">
-              <div class="card-body py-2">
-                <div class="d-flex justify-content-between align-items-center mb-2">
-                  <strong class="small text-uppercase text-muted">Current Hierarchy Leader Matches</strong>
-                  <span id="role-preview-count" class="badge bg-secondary">0</span>
-                </div>
-                <button id="toggle-role-preview" type="button" class="btn btn-sm btn-outline-secondary mb-2">Show Matches</button>
-                <div id="role-preview-list" class="small text-muted" style="display: none;">Add at least one condition to preview matching employees.</div>
-              </div>
-            </div>
-          </div>
-
-          <!-- All Employees Tab -->
-          <div class="tab-pane fade" id="all-employees" role="tabpanel" aria-labelledby="all-employees-tab">
-            <p class="text-muted">Using all active employees in the system as the starting pool</p>
-          </div>
         </div>
-      </div>
-    </div>
-
-    <!-- STEP 2: Filter Results -->
-    <div class="card mb-4">
-      <div class="card-header bg-info text-white">
-        <h5 class="mb-0">Step 2: Filter Results</h5>
-        <small>Narrow down the results (optional)</small>
-      </div>
-      <div class="card-body">
-        <p class="text-muted small mb-3">Leave all blank to include everyone in the pool</p>
-
-        <div class="mb-3">
-          <label for="filter-job-titles" class="form-label">Job Title(s)/Job Code(s)</label>
-          <div id="filter-job-titles-tags" class="mb-2 d-flex flex-wrap gap-1"></div>
-          <input type="text" class="form-control" id="filter-job-titles" placeholder="Type to search...">
-          <div class="list-group" id="filter-job-titles-suggestions" style="display: none; position: absolute; z-index: 1000; max-height: 200px; overflow-y: auto;"></div>
-        </div>
-
-        <div class="mb-3">
-          <label for="filter-bu-codes" class="form-label">Business Unit(s)</label>
-          <div id="filter-bu-codes-tags" class="mb-2 d-flex flex-wrap gap-1"></div>
-          <input type="text" class="form-control" id="filter-bu-codes" placeholder="Type to search...">
-          <div class="list-group" id="filter-bu-codes-suggestions" style="display: none; position: absolute; z-index: 1000; max-height: 200px; overflow-y: auto;"></div>
-        </div>
-
-        <div class="mb-3">
-          <label for="filter-companies" class="form-label">Companies (Countries)</label>
-          <div id="filter-companies-tags" class="mb-2 d-flex flex-wrap gap-1"></div>
-          <input type="text" class="form-control" id="filter-companies" placeholder="Type to search...">
-          <div class="list-group" id="filter-companies-suggestions" style="display: none; position: absolute; z-index: 1000; max-height: 200px; overflow-y: auto;"></div>
-        </div>
-
-        <div class="mb-3">
-          <label for="filter-tree-branches" class="form-label">Tree Branch(es)</label>
-          <div id="filter-tree-branches-tags" class="mb-2 d-flex flex-wrap gap-1"></div>
-          <input type="text" class="form-control" id="filter-tree-branches" placeholder="Type to search...">
-          <div class="list-group" id="filter-tree-branches-suggestions" style="display: none; position: absolute; z-index: 1000; max-height: 200px; overflow-y: auto;"></div>
-        </div>
-
-        <div class="mb-3">
-          <label for="filter-department-ids" class="form-label">Department ID(s)</label>
-          <div id="filter-department-ids-tags" class="mb-2 d-flex flex-wrap gap-1"></div>
-          <input type="text" class="form-control" id="filter-department-ids" placeholder="Type to search...">
-          <div class="list-group" id="filter-department-ids-suggestions" style="display: none; position: absolute; z-index: 1000; max-height: 200px; overflow-y: auto;"></div>
-        </div>
-
-        <div class="mb-3">
-          <label for="filter-full-part-time" class="form-label">Full/Part Time</label>
-          <select class="form-select" id="filter-full-part-time">
-            <option value="">-- All --</option>
-            <option value="F">Full Time</option>
-            <option value="P">Part Time</option>
-          </select>
-        </div>
+        <div id="blocks-empty" class="text-muted">No sources yet. Add your first source above.</div>
+        <div id="blocks-list" class="d-flex flex-column gap-2"></div>
+        <div class="small text-muted mt-2">Drag blocks to reorder them.</div>
       </div>
     </div>
 
     <div class="card">
-      <div class="card-header bg-secondary text-white">
-        <h5 class="mb-0">Step 3: Add Specific People</h5>
-        <small>Optional people to append after the main query completes</small>
+      <div class="card-header">
+        <h5 class="mb-0" id="selected-source-title">Selected Source Block</h5>
       </div>
-      <div class="card-body">
-        <div class="mb-3">
-          <label for="additional-person-search" class="form-label">Add Employee(s)</label>
-          <div id="additional-person-tags" class="mb-2 d-flex flex-wrap gap-1"></div>
-          <input type="text" class="form-control" id="additional-person-search" placeholder="Search by ID, name, or username...">
-          <div id="additional-person-suggestions" class="list-group mt-2" style="display: none; max-height: 200px; overflow-y: auto;"></div>
-        </div>
+      <div class="card-body" id="block-editor">
+        <div class="text-muted">Select a block to edit its details.</div>
       </div>
     </div>
   </div>
 
   <div class="col-lg-4">
     <div class="sticky-sql-panel">
-    <!-- SQL Preview -->
-    <div class="card mb-3">
-      <div class="card-header">
-        <h5 class="mb-0">Generated SQL</h5>
-      </div>
-      <div class="card-body">
-        <textarea id="sql-preview" class="form-control font-monospace" rows="12" readonly style="font-size: 0.85rem; background: #f5f5f5;"></textarea>
-        <div class="mt-2">
-          <button type="button" id="btn-test-query" class="btn btn-outline-secondary btn-sm" style="display: none;">
-            Test Query (Get Count)
-          </button>
+      <div class="card mb-3">
+        <div class="card-header">
+          <h5 class="mb-0">Generated SQL</h5>
+        </div>
+        <div class="card-body">
+          <textarea id="sql-preview" class="form-control font-monospace" rows="14" readonly style="font-size: 0.85rem; background: #f5f5f5;"></textarea>
+          <div class="mt-2 d-flex flex-wrap gap-2">
+            <button type="button" id="btn-test-query" class="btn btn-outline-secondary btn-sm" style="display: none;">Get count for entire query</button>
+            <span id="whole-query-count" class="badge bg-secondary" style="display: none;">Query Count: --</span>
+          </div>
           <div id="test-result" class="alert alert-info mt-2" style="display: none;"></div>
         </div>
       </div>
-    </div>
 
-    <!-- Actions -->
-    <div class="card">
-      <div class="card-header">
-        <h5 class="mb-0">Actions</h5>
+      <div class="card">
+        <div class="card-header">
+          <h5 class="mb-0">Actions</h5>
+        </div>
+        <div class="card-body">
+          <button type="button" id="btn-accept-sql" class="btn btn-success w-100 mb-2" style="display: none;">Accept This Query</button>
+          <button type="button" id="btn-edit-sql" class="btn btn-warning w-100 mb-2">Edit SQL Manually</button>
+          <button type="button" id="btn-cancel" class="btn btn-outline-secondary w-100">Cancel</button>
+        </div>
       </div>
-      <div class="card-body">
-        <button type="button" id="btn-accept-sql" class="btn btn-success w-100 mb-2" style="display: none;">
-          Accept This Query
-        </button>
-        <button type="button" id="btn-edit-sql" class="btn btn-warning w-100 mb-2">
-          Edit SQL Manually
-        </button>
-        <button type="button" id="btn-cancel" class="btn btn-outline-secondary w-100">
-          Cancel
-        </button>
-      </div>
-    </div>
     </div>
   </div>
 </div>
 
-<!-- Typeahead Styles -->
 <style>
-  #person-suggestions .list-group-item,
-  #additional-person-suggestions .list-group-item {
-    cursor: pointer;
-    font-size: 0.9rem;
-  }
-
-  #person-suggestions .list-group-item:hover,
-  #additional-person-suggestions .list-group-item:hover {
-    background-color: #e7f1ff;
-  }
-
   .sticky-sql-panel {
     position: sticky;
     top: 12px;
   }
+
+  .block-card {
+    border: 1px solid var(--app-border);
+    border-radius: 10px;
+    padding: 10px;
+    background: #fff;
+    cursor: pointer;
+  }
+
+  .block-card.dragging {
+    opacity: 0.6;
+  }
+
+  .block-card.drop-target {
+    border-color: #0d6efd;
+    box-shadow: 0 0 0 2px rgba(13, 110, 253, 0.25);
+  }
+
+  .block-warn {
+    color: #b36b00;
+    font-weight: 700;
+    margin-left: 6px;
+  }
+
+  .block-card.block-selected {
+    border-color: var(--app-primary);
+    box-shadow: 0 0 0 2px rgba(13, 110, 253, 0.15);
+  }
+
+  .typeahead-list .list-group-item {
+    cursor: pointer;
+    font-size: 0.9rem;
+  }
+
+  .typeahead-list .list-group-item:hover {
+    background-color: #e7f1ff;
+  }
+
+  .details-card {
+    border: 1px solid var(--app-border);
+    border-radius: 8px;
+    padding: 10px;
+    background: #f9fcff;
+  }
 </style>
 
 <script>
-  let currentMode = 'by_person';
-
-  // Tags for selected values
-  const fieldTags = {
-    'attr-job-title': [],
-    'attr-bu-code': [],
-    'attr-company': [],
-    'attr-tree-branch': [],
-    'attr-department-id': [],
-    'filter-job-titles': [],
-    'filter-bu-codes': [],
-    'filter-companies': [],
-    'filter-tree-branches': [],
-    'filter-department-ids': []
+  const BLOCK_TYPES = {
+    hierarchy_by_person: 'Hierarchy by Person',
+    hierarchy_by_role: 'Hierarchy by Role',
+    filtered_population: 'All Employees with Filters',
+    manual_individuals: 'Manual Individuals',
   };
 
-  let shownDbErrorBanner = false;
-  let rolePreviewExpanded = false;
-  let rolePreviewRoots = [];
+  let blocks = [];
+  let selectedBlockIndex = -1;
+  let currentSQL = '';
+  let dragSourceIndex = null;
+  let hasUnsavedChanges = false;
+  let allowExit = false;
+
+  function showDbErrorBanner(message) {
+    const banner = document.getElementById('db-error-banner');
+    banner.textContent = `Error: ${String(message)}`;
+    banner.style.display = 'block';
+  }
+
+  function clearDbErrorBanner() {
+    const banner = document.getElementById('db-error-banner');
+    banner.style.display = 'none';
+    banner.textContent = '';
+  }
+
+  function markDirty() {
+    hasUnsavedChanges = true;
+  }
+
+  function markSaved() {
+    hasUnsavedChanges = false;
+  }
+
+  function confirmLeaveIfDirty() {
+    if (!hasUnsavedChanges || allowExit) {
+      return true;
+    }
+    return confirm('You have unsaved changes. Leave without saving?');
+  }
 
   function resetTestResult() {
     const testResult = document.getElementById('test-result');
@@ -281,629 +179,946 @@
     testResult.textContent = '';
   }
 
-  function activateModeTab(mode) {
-    currentMode = mode === 'by_attributes' ? 'by_role' : mode;
-    const tabMap = {
-      by_person: 'by-person-tab',
-      by_role: 'by-role-tab',
-      all_employees: 'all-employees-tab'
+  function newId() {
+    return `b_${Date.now()}_${Math.random().toString(16).slice(2)}`;
+  }
+
+  function defaultFilters() {
+    return {
+      job_titles_display: [],
+      job_codes: [],
+      bu_codes: [],
+      companies: [],
+      tree_branches: [],
+      department_ids: [],
+      full_part_time: '',
     };
-    const paneMap = {
-      by_person: 'by-person',
-      by_role: 'by-role',
-      all_employees: 'all-employees'
+  }
+
+  function createBlock(type) {
+    if (type === 'hierarchy_by_person') {
+      return {
+        id: newId(),
+        type,
+        name: BLOCK_TYPES[type],
+        persons: [],
+        exclude_root: false,
+        direct_reports_only: false,
+        filters: defaultFilters(),
+        last_count: null,
+      };
+    }
+    if (type === 'hierarchy_by_role') {
+      return {
+        id: newId(),
+        type,
+        name: BLOCK_TYPES[type],
+        attributes: {
+          job_title_display: '',
+          job_code: '',
+          job_title_text: '',
+          bu_code: '',
+          company: '',
+          tree_branch: '',
+          department_id: '',
+        },
+        direct_reports_only: false,
+        root_preview_count: 0,
+        filters: defaultFilters(),
+        last_count: null,
+      };
+    }
+    if (type === 'filtered_population') {
+      return {
+        id: newId(),
+        type,
+        name: BLOCK_TYPES[type],
+        filters: defaultFilters(),
+        last_count: null,
+      };
+    }
+    return {
+      id: newId(),
+      type: 'manual_individuals',
+      name: BLOCK_TYPES.manual_individuals,
+      persons: [],
+      last_count: null,
     };
-    const tabId = tabMap[currentMode] || 'by-person-tab';
-    const paneId = paneMap[currentMode] || 'by-person';
-    const tabButton = document.getElementById(tabId);
-    const paneElement = document.getElementById(paneId);
-    
-    if (!tabButton || !paneElement) return;
-    
-    // Remove active class and aria-selected from all tabs
-    document.querySelectorAll('.nav-tabs .nav-link').forEach(btn => {
-      btn.classList.remove('active');
-      btn.setAttribute('aria-selected', 'false');
-    });
-    
-    // Remove active/show classes from all panes
-    document.querySelectorAll('.tab-pane').forEach(pane => {
-      pane.classList.remove('show', 'active');
-    });
-    
-    // Add active class and aria-selected to correct tab
-    tabButton.classList.add('active');
-    tabButton.setAttribute('aria-selected', 'true');
-    
-    // Add active/show classes to correct pane
-    paneElement.classList.add('show', 'active');
-    
-    // Also try Bootstrap's Tab API if available
-    if (window.bootstrap && window.bootstrap.Tab) {
-      try {
-        window.bootstrap.Tab.getOrCreateInstance(tabButton).show();
-      } catch (_) {
-        // Ignore if Bootstrap Tab API fails
-      }
-    }
-  }
-
-  function showDbErrorBanner(message) {
-    if (shownDbErrorBanner) {
-      return;
-    }
-    const banner = document.getElementById('db-error-banner');
-    banner.textContent = `Database connection issue: ${message}`;
-    banner.style.display = 'block';
-    shownDbErrorBanner = true;
-  }
-
-  function setRolePreviewExpanded(expanded) {
-    rolePreviewExpanded = expanded;
-    const btn = document.getElementById('toggle-role-preview');
-    const list = document.getElementById('role-preview-list');
-    btn.textContent = expanded ? 'Hide Matches' : 'Show Matches';
-    list.style.display = expanded ? 'block' : 'none';
-  }
-
-  // Tag management functions
-  function addTag(fieldId, value) {
-    if (fieldId.startsWith('attr-')) {
-      fieldTags[fieldId] = [value];
-    } else {
-      if (!fieldTags[fieldId].includes(value)) {
-        fieldTags[fieldId].push(value);
-      }
-    }
-    updateTagsDisplay(fieldId);
-    updateInputValue(fieldId);
-  }
-
-  function removeTag(fieldId, value) {
-    fieldTags[fieldId] = fieldTags[fieldId].filter(v => v !== value);
-    updateTagsDisplay(fieldId);
-    updateInputValue(fieldId);
-  }
-
-  function updateTagsDisplay(fieldId) {
-    const tagsDiv = document.getElementById(fieldId + '-tags');
-    if (!tagsDiv) {
-      return;
-    }
-    tagsDiv.innerHTML = fieldTags[fieldId].map(value => `
-      <span class="badge bg-primary d-inline-flex align-items-center gap-1">
-        ${value}
-        <button type="button" class="btn-close btn-close-white" aria-label="Remove" onclick="removeTag('${fieldId}', '${value.replace(/'/g, "\\'")}')"></button>
-      </span>
-    `).join('');
-  }
-
-  function updateInputValue(fieldId) {
-    const input = document.getElementById(fieldId);
-    input.value = fieldTags[fieldId].join(', ');
-    if (fieldId.startsWith('attr-')) {
-      updateRolePreview();
-    }
-    // Update SQL when tags change
-    updateSQL();
-  }
-
-  // Person tag management
-  let selectedPersons = [];
-  let selectedAdditionalPersons = [];
-
-  function addPersonTag(person) {
-    if (!selectedPersons.find(p => p.id === person.id)) {
-      selectedPersons.push(person);
-    }
-    updatePersonTagsDisplay();
-  }
-
-  function removePersonTag(personId) {
-    selectedPersons = selectedPersons.filter(p => p.id !== personId);
-    updatePersonTagsDisplay();
-  }
-
-  function updatePersonTagsDisplay() {
-    const tagsDiv = document.getElementById('person-tags');
-    tagsDiv.innerHTML = selectedPersons.map(person => `
-      <span class="badge bg-primary d-inline-flex align-items-center gap-1">
-        ${person.first_name} ${person.last_name} - ${person.job_title || 'No title'}
-        <button type="button" class="btn-close btn-close-white" aria-label="Remove" onclick="removePersonTag('${person.id}')"></button>
-      </span>
-    `).join('');
-    updateSQL();
-  }
-
-  function addAdditionalPersonTag(person) {
-    if (!selectedAdditionalPersons.find(p => p.id === person.id)) {
-      selectedAdditionalPersons.push(person);
-    }
-    updateAdditionalPersonTagsDisplay();
-  }
-
-  function removeAdditionalPersonTag(personId) {
-    selectedAdditionalPersons = selectedAdditionalPersons.filter(p => p.id !== personId);
-    updateAdditionalPersonTagsDisplay();
-  }
-
-  function updateAdditionalPersonTagsDisplay() {
-    const tagsDiv = document.getElementById('additional-person-tags');
-    tagsDiv.innerHTML = selectedAdditionalPersons.map(person => `
-      <span class="badge bg-primary d-inline-flex align-items-center gap-1">
-        ${person.first_name} ${person.last_name} - ${person.job_title || 'No title'}
-        <button type="button" class="btn-close btn-close-white" aria-label="Remove" onclick="removeAdditionalPersonTag('${person.id}')"></button>
-      </span>
-    `).join('');
-    updateSQL();
   }
 
   function parseJobDisplay(value) {
-    if (typeof value !== 'string') {
+    const raw = String(value || '').trim();
+    if (!raw) {
       return { code: '', title: '' };
     }
-    const trimmed = value.trim();
-    if (!trimmed) {
-      return { code: '', title: '' };
-    }
-    const parts = trimmed.split(' - ', 2);
+    const parts = raw.split(' - ', 2);
     return {
       code: (parts[0] || '').trim(),
       title: (parts[1] || '').trim(),
     };
   }
 
-  let currentSQL = '';
-  let currentBuilderParams = null;
+  function blockHasFilters(block) {
+    const f = (block && block.filters) || {};
+    return (
+      (Array.isArray(f.job_titles_display) && f.job_titles_display.length > 0)
+      || (Array.isArray(f.bu_codes) && f.bu_codes.length > 0)
+      || (Array.isArray(f.companies) && f.companies.length > 0)
+      || (Array.isArray(f.tree_branches) && f.tree_branches.length > 0)
+      || (Array.isArray(f.department_ids) && f.department_ids.length > 0)
+      || !!f.full_part_time
+    );
+  }
 
-  // Field mapping for attribute search
-  const fieldMap = {
-    'attr-job-title': 'job_title',
-    'attr-bu-code': 'bu_code',
-    'attr-company': 'company',
-    'attr-tree-branch': 'tree_branch',
-    'attr-department-id': 'department_id'
-  };
-
-  const filterFieldMap = {
-    'filter-job-titles': 'job_title',
-    'filter-bu-codes': 'bu_code',
-    'filter-companies': 'company',
-    'filter-tree-branches': 'tree_branch',
-    'filter-department-ids': 'department_id'
-  };
-
-  // Tab switching
-  document.getElementById('by-person-tab').addEventListener('click', () => {
-    currentMode = 'by_person';
-    updatePersonTagsDisplay();
-    updateSQL();
-  });
-
-  document.getElementById('by-role-tab').addEventListener('click', () => {
-    currentMode = 'by_role';
-    updateRolePreview();
-    updateSQL();
-  });
-
-  document.getElementById('all-employees-tab').addEventListener('click', () => {
-    currentMode = 'all_employees';
-    updateSQL();
-  });
-
-  document.getElementById('toggle-role-preview').addEventListener('click', () => {
-    setRolePreviewExpanded(!rolePreviewExpanded);
-  });
-
-  // Typeahead function (configurable cache vs live)
-  // Setup simple typeahead for attribute fields (like person search)
-  const attrFields = ['attr-job-title', 'attr-bu-code', 'attr-company', 'attr-tree-branch', 'attr-department-id'];
-  let attrSearchTimer = null;
-
-  attrFields.forEach(fieldId => {
-    const input = document.getElementById(fieldId);
-    const suggestionsDiv = document.getElementById(fieldId + '-suggestions');
-    const field = fieldMap[fieldId];
-
-    if (!input) {
-      console.error('Input element not found:', fieldId);
-      return;
+  function blockSummary(block) {
+    if (block.type === 'hierarchy_by_person') {
+      return `${block.persons.length} selected person(s)`;
     }
-    if (!suggestionsDiv) {
-      console.error('Suggestions div not found:', fieldId + '-suggestions');
-      return;
+    if (block.type === 'hierarchy_by_role') {
+      const attrs = block.attributes || {};
+      const parts = [
+        attrs.job_title_display,
+        attrs.bu_code,
+        attrs.company,
+        attrs.tree_branch,
+        attrs.department_id,
+      ].filter(Boolean);
+      const root = parts.length > 0 ? parts.join(' | ') : 'No role attributes selected';
+      return `${root} | Root matches: ${block.root_preview_count || 0}`;
+    }
+    if (block.type === 'filtered_population') {
+      return blockHasFilters(block) ? 'All employees with filters applied' : 'All active employees';
+    }
+    return `${block.persons.length} manual individual(s)`;
+  }
+
+  function normalizePersons(persons) {
+    if (!Array.isArray(persons)) return [];
+    return persons
+      .map((p) => ({
+        id: p.id || p.person_id || '',
+        username: p.username || p.person_username || '',
+        first_name: p.first_name || '',
+        last_name: p.last_name || '',
+        job_title: p.job_title || '',
+      }))
+      .filter((p) => p.id || p.username);
+  }
+
+  function isUnfinishedBlock(block) {
+    if (block.type === 'filtered_population') {
+      return !blockHasFilters(block);
+    }
+    if (block.type === 'manual_individuals') {
+      return !Array.isArray(block.persons) || block.persons.length === 0;
+    }
+    return false;
+  }
+
+  function unfinishedReason(block) {
+    if (block.type === 'filtered_population') {
+      return 'No filters are selected, so this source includes all active employees.';
+    }
+    if (block.type === 'manual_individuals') {
+      return 'No individuals selected yet.';
+    }
+    return '';
+  }
+
+  function blockToApi(block) {
+    const payload = {
+      type: block.type,
+      name: block.name || BLOCK_TYPES[block.type],
+    };
+
+    if (block.type === 'hierarchy_by_person') {
+      const persons = normalizePersons(block.persons);
+      payload.persons = persons.map(p => ({
+        person_id: p.id,
+        person_username: p.username,
+      }));
+      payload.selected_person_details = persons.map(p => ({
+        id: p.id,
+        first_name: p.first_name,
+        last_name: p.last_name,
+        username: p.username,
+        job_title: p.job_title || '',
+      }));
+      payload.exclude_root = !!block.exclude_root;
+      payload.direct_reports_only = !!block.direct_reports_only;
     }
 
-    input.addEventListener('input', (e) => {
-      const query = e.target.value.trim();
-      if (query.length < 2) {
-        suggestionsDiv.style.display = 'none';
-        return;
-      }
+    if (block.type === 'hierarchy_by_role') {
+      const attrs = block.attributes || {};
+      payload.attributes = {
+        job_title_display: attrs.job_title_display || '',
+        job_code: attrs.job_code || '',
+        job_title_text: attrs.job_title_text || '',
+        job_title: attrs.job_title_text || '',
+        bu_code: attrs.bu_code || '',
+        company: attrs.company || '',
+        tree_branch: attrs.tree_branch || '',
+        department_id: attrs.department_id || '',
+      };
+      payload.direct_reports_only = !!block.direct_reports_only;
+    }
 
-      clearTimeout(attrSearchTimer);
-      attrSearchTimer = setTimeout(async () => {
-        try {
-          const response = await fetch(`/api/search-values?field=${field}&q=${encodeURIComponent(query)}`);
-          const data = await response.json();
+    if (block.type === 'manual_individuals') {
+      const persons = normalizePersons(block.persons);
+      payload.persons = persons.map(p => ({
+        person_id: p.id,
+        person_username: p.username,
+      }));
+      payload.selected_person_details = persons.map(p => ({
+        id: p.id,
+        first_name: p.first_name,
+        last_name: p.last_name,
+        username: p.username,
+        job_title: p.job_title || '',
+      }));
+    }
 
-          if (data && data.error) {
-            showDbErrorBanner(data.error);
-            suggestionsDiv.style.display = 'none';
-            return;
-          }
+    if (block.filters) {
+      payload.filters = {
+        job_titles_display: block.filters.job_titles_display || [],
+        job_codes: block.filters.job_codes || [],
+        bu_codes: block.filters.bu_codes || [],
+        companies: block.filters.companies || [],
+        tree_branches: block.filters.tree_branches || [],
+        department_ids: block.filters.department_ids || [],
+        full_part_time: block.filters.full_part_time || '',
+      };
+    }
 
-          if (Array.isArray(data) && data.length > 0) {
-            // Position the suggestions below the input
-            suggestionsDiv.style.top = (input.offsetTop + input.offsetHeight) + 'px';
-            suggestionsDiv.style.left = input.offsetLeft + 'px';
-            suggestionsDiv.style.width = input.offsetWidth + 'px';
-            suggestionsDiv.innerHTML = data.map(item => `
-              <a href="#" class="list-group-item list-group-item-action" data-value="${item.value}">
-                ${item.value}
-              </a>
-            `).join('');
+    return payload;
+  }
 
-            suggestionsDiv.querySelectorAll('a').forEach(a => {
-              a.addEventListener('click', (e) => {
-                e.preventDefault();
-                addTag(fieldId, a.dataset.value);
-                input.value = ''; // clear search input
-                suggestionsDiv.style.display = 'none';
-              });
-            });
-            suggestionsDiv.style.display = 'block';
-          } else {
-            // Position the suggestions below the input
-            suggestionsDiv.style.top = (input.offsetTop + input.offsetHeight) + 'px';
-            suggestionsDiv.style.left = input.offsetLeft + 'px';
-            suggestionsDiv.style.width = input.offsetWidth + 'px';
-            suggestionsDiv.innerHTML = '<div class="list-group-item text-muted">No results</div>';
-            suggestionsDiv.style.display = 'block';
-          }
-        } catch (error) {
-          console.error('Attribute search error:', error);
-          showDbErrorBanner(error);
+  function builderPayload() {
+    return {
+      version: 2,
+      blocks: blocks.map(blockToApi),
+    };
+  }
+
+  function renderBlocksList() {
+    const list = document.getElementById('blocks-list');
+    const empty = document.getElementById('blocks-empty');
+    empty.style.display = blocks.length === 0 ? 'block' : 'none';
+
+    list.innerHTML = blocks.map((block, index) => {
+      const selectedClass = index === selectedBlockIndex ? 'block-selected' : '';
+      const countLabel = block.last_count === null ? 'Count: --' : `Count: ${block.last_count}`;
+      const warn = isUnfinishedBlock(block)
+        ? `<span class="block-warn" title="${unfinishedReason(block)}">&#9888;</span>`
+        : '';
+      return `
+        <div class="block-card ${selectedClass}" draggable="true" data-block-index="${index}">
+          <div class="d-flex justify-content-between align-items-start gap-2">
+            <div>
+              <div class="fw-semibold">${index + 1}. ${BLOCK_TYPES[block.type]}${warn}</div>
+              <div class="small text-muted">${blockSummary(block)}</div>
+            </div>
+            <span class="badge bg-light text-dark">${countLabel}</span>
+          </div>
+          <div class="mt-2 d-flex justify-content-end flex-wrap gap-1">
+            <button type="button" class="btn btn-sm btn-outline-danger" data-action="remove" data-index="${index}">Delete</button>
+          </div>
+        </div>
+      `;
+    }).join('');
+
+    list.querySelectorAll('.block-card').forEach((card) => {
+      card.addEventListener('click', (event) => {
+        if (event.target.closest('button[data-action="remove"]')) {
+          return;
         }
-      }, 300);
-    });
+        const idx = Number(card.getAttribute('data-block-index'));
+        if (!Number.isInteger(idx)) return;
+        selectedBlockIndex = idx;
+        renderBlocksList();
+        renderBlockEditor();
+      });
 
-    // Close suggestions on blur
-    input.addEventListener('blur', () => {
-      setTimeout(() => suggestionsDiv.style.display = 'none', 200);
-    });
-  });
+      card.addEventListener('dragstart', (event) => {
+        const idx = Number(card.getAttribute('data-block-index'));
+        if (!Number.isInteger(idx)) return;
+        dragSourceIndex = idx;
+        card.classList.add('dragging');
+        event.dataTransfer.effectAllowed = 'move';
+      });
 
-  // Setup simple typeahead for filter fields (comma-separated)
-  const filterFields = ['filter-job-titles', 'filter-bu-codes', 'filter-companies', 'filter-tree-branches', 'filter-department-ids'];
-  let filterSearchTimer = null;
+      card.addEventListener('dragend', () => {
+        dragSourceIndex = null;
+        card.classList.remove('dragging');
+        list.querySelectorAll('.block-card').forEach((c) => c.classList.remove('drop-target'));
+      });
 
-  filterFields.forEach(fieldId => {
-    const input = document.getElementById(fieldId);
-    const suggestionsDiv = document.getElementById(fieldId + '-suggestions');
-    const field = filterFieldMap[fieldId];
+      card.addEventListener('dragover', (event) => {
+        event.preventDefault();
+        card.classList.add('drop-target');
+      });
 
-    if (!input) {
-      console.error('Input element not found:', fieldId);
-      return;
-    }
-    if (!suggestionsDiv) {
-      console.error('Suggestions div not found:', fieldId + '-suggestions');
-      return;
-    }
+      card.addEventListener('dragleave', () => {
+        card.classList.remove('drop-target');
+      });
 
-    input.addEventListener('input', (e) => {
-      const query = e.target.value.trim();
-      if (query.length < 2) {
-        suggestionsDiv.style.display = 'none';
-        return;
-      }
-
-      clearTimeout(filterSearchTimer);
-      filterSearchTimer = setTimeout(async () => {
-        try {
-          const response = await fetch(`/api/search-values?field=${field}&q=${encodeURIComponent(query)}`);
-          const data = await response.json();
-
-          if (data && data.error) {
-            showDbErrorBanner(data.error);
-            suggestionsDiv.style.display = 'none';
-            return;
-          }
-
-          if (Array.isArray(data) && data.length > 0) {
-            // Position the suggestions below the input
-            suggestionsDiv.style.top = (input.offsetTop + input.offsetHeight) + 'px';
-            suggestionsDiv.style.left = input.offsetLeft + 'px';
-            suggestionsDiv.style.width = input.offsetWidth + 'px';
-            suggestionsDiv.innerHTML = data.map(item => `
-              <a href="#" class="list-group-item list-group-item-action" data-value="${item.value}">
-                ${item.value}
-              </a>
-            `).join('');
-
-            suggestionsDiv.querySelectorAll('a').forEach(a => {
-              a.addEventListener('click', (e) => {
-                e.preventDefault();
-                addTag(fieldId, a.dataset.value);
-                input.value = ''; // clear search input
-                suggestionsDiv.style.display = 'none';
-              });
-            });
-            suggestionsDiv.style.display = 'block';
-          } else {
-            // Position the suggestions below the input
-            suggestionsDiv.style.top = (input.offsetTop + input.offsetHeight) + 'px';
-            suggestionsDiv.style.left = input.offsetLeft + 'px';
-            suggestionsDiv.style.width = input.offsetWidth + 'px';
-            suggestionsDiv.innerHTML = '<div class="list-group-item text-muted">No results</div>';
-            suggestionsDiv.style.display = 'block';
-          }
-        } catch (error) {
-          console.error('Filter search error:', error);
-          showDbErrorBanner(error);
+      card.addEventListener('drop', (event) => {
+        event.preventDefault();
+        card.classList.remove('drop-target');
+        const targetIndex = Number(card.getAttribute('data-block-index'));
+        if (!Number.isInteger(targetIndex) || dragSourceIndex === null || dragSourceIndex === targetIndex) {
+          return;
         }
-      }, 300);
-    });
-
-    // Close suggestions on blur
-    input.addEventListener('blur', () => {
-      setTimeout(() => suggestionsDiv.style.display = 'none', 200);
-    });
-  });
-
-  // Update on exclude root change
-  document.getElementById('person-exclude-root').addEventListener('change', updateSQL);
-  document.getElementById('person-direct-reports-only').addEventListener('change', updateSQL);
-  document.getElementById('role-direct-reports-only').addEventListener('change', updateSQL);
-
-  function wirePersonSearch(inputId, suggestionsId, addPersonHandler) {
-    const searchInput = document.getElementById(inputId);
-    const suggestions = document.getElementById(suggestionsId);
-    let searchTimer = null;
-
-    searchInput.addEventListener('input', (event) => {
-      const query = event.target.value.trim();
-      clearTimeout(searchTimer);
-      if (query.length < 2) {
-        suggestions.style.display = 'none';
-        return;
-      }
-
-      searchTimer = setTimeout(async () => {
-        try {
-          const response = await fetch(`/api/search-employees?q=${encodeURIComponent(query)}`);
-          const employees = await response.json();
-          if (searchInput.value.trim() !== query) return;
-
-          if (employees && employees.error) {
-            showDbErrorBanner(employees.error);
-            suggestions.style.display = 'none';
-            return;
-          }
-
-          if (Array.isArray(employees) && employees.length > 0) {
-            suggestions.innerHTML = employees.map(emp => `
-              <a href="#" class="list-group-item list-group-item-action" data-id="${emp.id}" data-first="${emp.first_name}" data-last="${emp.last_name}" data-username="${emp.username}" data-job-title="${emp.job_title || ''}">
-                <strong>${emp.first_name} ${emp.last_name}</strong><br>
-                <small>${emp.job_title || 'No title'} • ${emp.username}</small>
-              </a>
-            `).join('');
-
-            suggestions.querySelectorAll('a').forEach(item => {
-              item.addEventListener('click', (clickEvent) => {
-                clickEvent.preventDefault();
-                addPersonHandler({
-                  id: item.dataset.id,
-                  first_name: item.dataset.first,
-                  last_name: item.dataset.last,
-                  username: item.dataset.username,
-                  job_title: item.dataset.jobTitle || ''
-                });
-                searchInput.value = '';
-                suggestions.style.display = 'none';
-              });
-            });
-            suggestions.style.display = 'block';
-          } else {
-            suggestions.innerHTML = '<div class="list-group-item text-muted">No results</div>';
-            suggestions.style.display = 'block';
-          }
-        } catch (error) {
-          console.error('Search error:', error);
-          showDbErrorBanner(error);
-        }
-      }, 300);
-    });
-
-    searchInput.addEventListener('blur', () => {
-      setTimeout(() => {
-        suggestions.style.display = 'none';
-      }, 200);
+        const [dragged] = blocks.splice(dragSourceIndex, 1);
+        blocks.splice(targetIndex, 0, dragged);
+        selectedBlockIndex = targetIndex;
+        markDirty();
+        renderBlocksList();
+        renderBlockEditor();
+        updateSQL();
+      });
     });
   }
 
-  wirePersonSearch('person-search', 'person-suggestions', addPersonTag);
-  wirePersonSearch('additional-person-search', 'additional-person-suggestions', addAdditionalPersonTag);
+  function removeBlock(index) {
+    blocks.splice(index, 1);
+    if (blocks.length === 0) {
+      selectedBlockIndex = -1;
+    } else if (selectedBlockIndex >= blocks.length) {
+      selectedBlockIndex = blocks.length - 1;
+    }
+    markDirty();
+    renderBlocksList();
+    renderBlockEditor();
+    updateSQL();
+  }
 
-  async function updateRolePreview() {
-    const list = document.getElementById('role-preview-list');
+  function renderTagList(containerId, values, onRemove) {
+    const div = document.getElementById(containerId);
+    if (!div) return;
+    div.innerHTML = values.map((value, idx) => `
+      <span class="badge bg-primary d-inline-flex align-items-center gap-1">
+        ${value}
+        <button type="button" class="btn-close btn-close-white" aria-label="Remove" data-remove-idx="${idx}"></button>
+      </span>
+    `).join('');
+    div.querySelectorAll('button[data-remove-idx]').forEach(btn => {
+      btn.addEventListener('click', () => onRemove(Number(btn.dataset.removeIdx)));
+    });
+  }
+
+  function wireEmployeeSearch(inputId, listId, onPick) {
+    const input = document.getElementById(inputId);
+    const list = document.getElementById(listId);
+    if (!input || !list) return;
+
+    let timer = null;
+    input.addEventListener('input', (event) => {
+      const query = event.target.value.trim();
+      clearTimeout(timer);
+      if (query.length < 2) {
+        list.style.display = 'none';
+        return;
+      }
+
+      timer = setTimeout(async () => {
+        try {
+          clearDbErrorBanner();
+          const response = await fetch(`/api/search-employees?q=${encodeURIComponent(query)}`);
+          const data = await response.json();
+          if (data && data.error) {
+            showDbErrorBanner(data.error);
+            list.style.display = 'none';
+            return;
+          }
+
+          if (!Array.isArray(data) || data.length === 0) {
+            list.innerHTML = '<div class="list-group-item text-muted">No results</div>';
+            list.style.display = 'block';
+            return;
+          }
+
+          list.innerHTML = data.map(emp => `
+            <a href="#" class="list-group-item list-group-item-action" data-id="${emp.id}" data-first="${emp.first_name}" data-last="${emp.last_name}" data-username="${emp.username}" data-job-title="${emp.job_title || ''}">
+              <strong>${emp.first_name} ${emp.last_name}</strong><br>
+              <small>${emp.job_title || 'No title'} • ${emp.username}</small>
+            </a>
+          `).join('');
+
+          list.querySelectorAll('a').forEach(item => {
+            item.addEventListener('click', (clickEvent) => {
+              clickEvent.preventDefault();
+              onPick({
+                id: item.dataset.id,
+                first_name: item.dataset.first,
+                last_name: item.dataset.last,
+                username: item.dataset.username,
+                job_title: item.dataset.jobTitle || '',
+              });
+              input.value = '';
+              list.style.display = 'none';
+            });
+          });
+
+          list.style.display = 'block';
+        } catch (error) {
+          showDbErrorBanner(error);
+        }
+      }, 250);
+    });
+
+    input.addEventListener('blur', () => setTimeout(() => { list.style.display = 'none'; }, 200));
+  }
+
+  function wireValueSearch(inputId, listId, field, onPick) {
+    const input = document.getElementById(inputId);
+    const list = document.getElementById(listId);
+    if (!input || !list) return;
+
+    let timer = null;
+    input.addEventListener('input', (event) => {
+      const query = event.target.value.trim();
+      clearTimeout(timer);
+      if (query.length < 2) {
+        list.style.display = 'none';
+        return;
+      }
+
+      timer = setTimeout(async () => {
+        try {
+          clearDbErrorBanner();
+          const response = await fetch(`/api/search-values?field=${field}&q=${encodeURIComponent(query)}`);
+          const data = await response.json();
+          if (data && data.error) {
+            showDbErrorBanner(data.error);
+            list.style.display = 'none';
+            return;
+          }
+
+          if (!Array.isArray(data) || data.length === 0) {
+            list.innerHTML = '<div class="list-group-item text-muted">No results</div>';
+            list.style.display = 'block';
+            return;
+          }
+
+          list.innerHTML = data.map(item => `<a href="#" class="list-group-item list-group-item-action" data-value="${item.value}">${item.value}</a>`).join('');
+          list.querySelectorAll('a').forEach(a => {
+            a.addEventListener('click', (clickEvent) => {
+              clickEvent.preventDefault();
+              onPick(a.dataset.value);
+              input.value = '';
+              list.style.display = 'none';
+            });
+          });
+
+          list.style.display = 'block';
+        } catch (error) {
+          showDbErrorBanner(error);
+        }
+      }, 250);
+    });
+
+    input.addEventListener('blur', () => setTimeout(() => { list.style.display = 'none'; }, 200));
+  }
+
+  function renderFiltersEditor(block, forceOpen = false) {
+    const openAttr = forceOpen || blockHasFilters(block) ? 'open' : '';
+    return `
+      <details id="block-filters-panel" ${openAttr}>
+        <summary class="fw-semibold">Filters (optional)</summary>
+        <div class="details-card mt-2">
+          <div class="mb-3">
+            <label for="filter-job-titles" class="form-label">Job Title(s)/Job Code(s)</label>
+            <div id="filter-job-titles-tags" class="mb-2 d-flex flex-wrap gap-1"></div>
+            <input type="text" class="form-control" id="filter-job-titles" placeholder="Type to search...">
+            <div id="filter-job-titles-suggestions" class="list-group typeahead-list mt-2" style="display: none; max-height: 200px; overflow-y: auto;"></div>
+          </div>
+          <div class="mb-3">
+            <label for="filter-bu-codes" class="form-label">Business Unit(s)</label>
+            <div id="filter-bu-codes-tags" class="mb-2 d-flex flex-wrap gap-1"></div>
+            <input type="text" class="form-control" id="filter-bu-codes" placeholder="Type to search...">
+            <div id="filter-bu-codes-suggestions" class="list-group typeahead-list mt-2" style="display: none; max-height: 200px; overflow-y: auto;"></div>
+          </div>
+          <div class="mb-3">
+            <label for="filter-companies" class="form-label">Companies (Countries)</label>
+            <div id="filter-companies-tags" class="mb-2 d-flex flex-wrap gap-1"></div>
+            <input type="text" class="form-control" id="filter-companies" placeholder="Type to search...">
+            <div id="filter-companies-suggestions" class="list-group typeahead-list mt-2" style="display: none; max-height: 200px; overflow-y: auto;"></div>
+          </div>
+          <div class="mb-3">
+            <label for="filter-tree-branches" class="form-label">Tree Branch(es)</label>
+            <div id="filter-tree-branches-tags" class="mb-2 d-flex flex-wrap gap-1"></div>
+            <input type="text" class="form-control" id="filter-tree-branches" placeholder="Type to search...">
+            <div id="filter-tree-branches-suggestions" class="list-group typeahead-list mt-2" style="display: none; max-height: 200px; overflow-y: auto;"></div>
+          </div>
+          <div class="mb-3">
+            <label for="filter-department-ids" class="form-label">Department ID(s)</label>
+            <div id="filter-department-ids-tags" class="mb-2 d-flex flex-wrap gap-1"></div>
+            <input type="text" class="form-control" id="filter-department-ids" placeholder="Type to search...">
+            <div id="filter-department-ids-suggestions" class="list-group typeahead-list mt-2" style="display: none; max-height: 200px; overflow-y: auto;"></div>
+          </div>
+          <div class="mb-1">
+            <label for="filter-full-part-time" class="form-label">Full/Part Time</label>
+            <select class="form-select" id="filter-full-part-time">
+              <option value="">-- All --</option>
+              <option value="F">Full Time</option>
+              <option value="P">Part Time</option>
+            </select>
+          </div>
+        </div>
+      </details>
+    `;
+  }
+
+  function renderBlockEditor() {
+    const editor = document.getElementById('block-editor');
+    const title = document.getElementById('selected-source-title');
+
+    if (selectedBlockIndex < 0 || selectedBlockIndex >= blocks.length) {
+      title.textContent = 'Selected Source Block';
+      editor.innerHTML = '<div class="text-muted">Select a block to edit its details.</div>';
+      return;
+    }
+
+    const block = blocks[selectedBlockIndex];
+    title.textContent = `Selected Source Block: ${selectedBlockIndex + 1}. ${BLOCK_TYPES[block.type]}`;
+    const previewControls = `
+      <div class="d-flex justify-content-end flex-wrap align-items-center gap-2 mb-3">
+        <button type="button" id="btn-test-block-query" class="btn btn-outline-secondary btn-sm">Get count for this source</button>
+        <span id="current-block-count" class="badge bg-secondary">Query Count: ${block.last_count === null ? '--' : block.last_count}</span>
+      </div>
+    `;
+
+    if (block.type === 'hierarchy_by_person') {
+      editor.innerHTML = `
+        ${previewControls}
+        <div class="mb-3">
+          <label for="person-search" class="form-label">Find Employee(s)</label>
+          <div id="person-tags" class="mb-2 d-flex flex-wrap gap-1"></div>
+          <input type="text" class="form-control" id="person-search" placeholder="Search by ID, name, or username...">
+          <div id="person-suggestions" class="list-group typeahead-list mt-2" style="display: none; max-height: 200px; overflow-y: auto;"></div>
+        </div>
+        <div class="mb-3">
+          <div class="form-check">
+            <input class="form-check-input" type="checkbox" id="person-exclude-root" ${block.exclude_root ? 'checked' : ''}>
+            <label class="form-check-label" for="person-exclude-root">Exclude selected root person(s) from output</label>
+          </div>
+          <div class="form-check mt-2">
+            <input class="form-check-input" type="checkbox" id="person-direct-reports-only" ${block.direct_reports_only ? 'checked' : ''}>
+            <label class="form-check-label" for="person-direct-reports-only">Only direct reports</label>
+          </div>
+        </div>
+        ${renderFiltersEditor(block)}
+      `;
+      bindPersonBlockEditor(block);
+      wireBlockCountPreview();
+      return;
+    }
+
+    if (block.type === 'hierarchy_by_role') {
+      const attrs = block.attributes || {};
+      editor.innerHTML = `
+        ${previewControls}
+        <div class="mb-3">
+          <label for="attr-job-title" class="form-label">Job Title(s)/Job Code(s)</label>
+          <div id="attr-job-title-tags" class="mb-2 d-flex flex-wrap gap-1"></div>
+          <input type="text" class="form-control" id="attr-job-title" placeholder="Type to search...">
+          <div id="attr-job-title-suggestions" class="list-group typeahead-list mt-2" style="display: none; max-height: 200px; overflow-y: auto;"></div>
+        </div>
+        <div class="mb-3">
+          <label for="attr-bu-code" class="form-label">Business Unit</label>
+          <input type="text" class="form-control" id="attr-bu-code" value="${attrs.bu_code || ''}">
+        </div>
+        <div class="mb-3">
+          <label for="attr-company" class="form-label">Company (Country)</label>
+          <input type="text" class="form-control" id="attr-company" value="${attrs.company || ''}">
+        </div>
+        <div class="mb-3">
+          <label for="attr-tree-branch" class="form-label">Tree Branch</label>
+          <input type="text" class="form-control" id="attr-tree-branch" value="${attrs.tree_branch || ''}">
+        </div>
+        <div class="mb-3">
+          <label for="attr-department-id" class="form-label">Department ID</label>
+          <input type="text" class="form-control" id="attr-department-id" value="${attrs.department_id || ''}">
+        </div>
+        <div class="mb-3 form-check">
+          <input class="form-check-input" type="checkbox" id="role-direct-reports-only" ${block.direct_reports_only ? 'checked' : ''}>
+          <label class="form-check-label" for="role-direct-reports-only">Only direct reports</label>
+        </div>
+        <div class="card border-light bg-light mb-3">
+          <div class="card-body py-2">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+              <strong class="small text-uppercase text-muted">Current Hierarchy Leader Matches</strong>
+              <span id="role-preview-count" class="badge bg-secondary">${block.root_preview_count || 0}</span>
+            </div>
+            <button id="toggle-role-preview" type="button" class="btn btn-sm btn-outline-secondary mb-2">Show Matches</button>
+            <div id="role-preview-list" class="small text-muted" style="display: none;">Add at least one condition to preview matching employees.</div>
+          </div>
+        </div>
+        ${renderFiltersEditor(block)}
+      `;
+      bindRoleBlockEditor(block);
+      wireBlockCountPreview();
+      return;
+    }
+
+    if (block.type === 'filtered_population') {
+      editor.innerHTML = `
+        ${previewControls}
+        <p class="text-muted">This block starts from all active employees and applies optional filters.</p>
+        ${renderFiltersEditor(block, true)}
+      `;
+      bindFilterEditor(block);
+      wireBlockCountPreview();
+      return;
+    }
+
+    editor.innerHTML = `
+      ${previewControls}
+      <div class="mb-3">
+        <label for="manual-person-search" class="form-label">Add Individual(s)</label>
+        <div id="manual-person-tags" class="mb-2 d-flex flex-wrap gap-1"></div>
+        <input type="text" class="form-control" id="manual-person-search" placeholder="Search by ID, name, or username...">
+        <div id="manual-person-suggestions" class="list-group typeahead-list mt-2" style="display: none; max-height: 200px; overflow-y: auto;"></div>
+      </div>
+    `;
+    bindManualIndividualsEditor(block);
+    wireBlockCountPreview();
+  }
+
+  function wireBlockCountPreview() {
+    const btnBlockTest = document.getElementById('btn-test-block-query');
+    if (!btnBlockTest) return;
+
+    btnBlockTest.addEventListener('click', async () => {
+      if (selectedBlockIndex < 0 || selectedBlockIndex >= blocks.length) return;
+      const selectedBlock = blocks[selectedBlockIndex];
+      try {
+        clearDbErrorBanner();
+        const response = await fetch('/api/generate-builder-sql', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ blocks: [blockToApi(selectedBlock)] }),
+        });
+        const sqlResp = await response.json();
+        if (sqlResp.error) {
+          showDbErrorBanner(sqlResp.error);
+          return;
+        }
+
+        const countResp = await runCountForSql(sqlResp.sql);
+        if (countResp.error) {
+          showDbErrorBanner(countResp.error);
+          return;
+        }
+
+        selectedBlock.last_count = countResp.count;
+        const countChip = document.getElementById('current-block-count');
+        if (countChip) {
+          countChip.textContent = `Query Count: ${countResp.count}`;
+        }
+        renderBlocksList();
+      } catch (error) {
+        showDbErrorBanner(error);
+      }
+    });
+  }
+
+  function bindPersonBlockEditor(block) {
+    function sync() {
+      block.exclude_root = document.getElementById('person-exclude-root').checked;
+      block.direct_reports_only = document.getElementById('person-direct-reports-only').checked;
+      markDirty();
+      renderBlocksList();
+      updateSQL();
+    }
+
+    renderTagList('person-tags', block.persons.map(p => `${p.first_name} ${p.last_name} (${p.username})`), (idx) => {
+      block.persons.splice(idx, 1);
+      markDirty();
+      bindPersonBlockEditor(block);
+      renderBlocksList();
+      updateSQL();
+    });
+
+    wireEmployeeSearch('person-search', 'person-suggestions', (person) => {
+      if (!block.persons.find(p => p.id === person.id)) {
+        block.persons.push(person);
+        markDirty();
+        bindPersonBlockEditor(block);
+        renderBlocksList();
+        updateSQL();
+      }
+    });
+
+    document.getElementById('person-exclude-root').addEventListener('change', sync);
+    document.getElementById('person-direct-reports-only').addEventListener('change', sync);
+    bindFilterEditor(block);
+  }
+
+  async function updateRolePreview(block, keepExpanded) {
+    const attrs = block.attributes || {};
     const count = document.getElementById('role-preview-count');
+    const list = document.getElementById('role-preview-list');
+    const toggle = document.getElementById('toggle-role-preview');
+    if (!count || !list || !toggle) return;
+
     const params = new URLSearchParams({
-      job_title: parseJobDisplay(fieldTags['attr-job-title'][0] || '').code,
-      bu_code: fieldTags['attr-bu-code'][0] || '',
-      company: fieldTags['attr-company'][0] || '',
-      tree_branch: fieldTags['attr-tree-branch'][0] || '',
-      department_id: fieldTags['attr-department-id'][0] || '',
+      job_title: attrs.job_title_display || '',
+      bu_code: attrs.bu_code || '',
+      company: attrs.company || '',
+      tree_branch: attrs.tree_branch || '',
+      department_id: attrs.department_id || '',
     });
 
     if (![...params.values()].some(v => v)) {
-      rolePreviewRoots = [];
+      block.root_preview_count = 0;
       count.textContent = '0';
       list.className = 'small text-muted';
       list.textContent = 'Add at least one condition to preview matching employees.';
+      list.style.display = keepExpanded ? 'block' : 'none';
+      toggle.textContent = keepExpanded ? 'Hide Matches' : 'Show Matches';
+      renderBlocksList();
       return;
     }
 
     try {
+      clearDbErrorBanner();
       const response = await fetch(`/api/preview-role-roots?${params.toString()}`);
       const employees = await response.json();
       if (employees && employees.error) {
-        rolePreviewRoots = [];
         showDbErrorBanner(employees.error);
-        count.textContent = '0';
-        list.className = 'small text-danger';
-        list.textContent = 'Unable to load preview.';
         return;
       }
 
-      rolePreviewRoots = Array.isArray(employees)
-        ? employees.map(emp => ({
-            first_name: emp.first_name,
-            last_name: emp.last_name,
-            job_title: emp.job_title || '',
-          }))
-        : [];
-
-      count.textContent = String(employees.length || 0);
-      if (!Array.isArray(employees) || employees.length === 0) {
+      const rows = Array.isArray(employees) ? employees : [];
+      block.root_preview_count = rows.length;
+      count.textContent = String(rows.length);
+      if (rows.length === 0) {
         list.className = 'small text-muted';
         list.textContent = 'No employees match current conditions.';
-        return;
+      } else {
+        list.className = 'small';
+        list.innerHTML = rows.map(emp => `
+          <div class="mb-1">
+            <strong>${emp.first_name} ${emp.last_name}</strong><br>
+            <span class="text-muted">${emp.job_title || 'No title'} • ${emp.username}</span>
+          </div>
+        `).join('');
       }
-
-      list.className = 'small';
-      list.innerHTML = employees.map(emp => `
-        <div class="mb-1">
-          <strong>${emp.first_name} ${emp.last_name}</strong><br>
-          <span class="text-muted">${emp.job_title || 'No title'} • ${emp.username}</span>
-        </div>
-      `).join('');
+      list.style.display = keepExpanded ? 'block' : 'none';
+      toggle.textContent = keepExpanded ? 'Hide Matches' : 'Show Matches';
+      renderBlocksList();
     } catch (error) {
-      rolePreviewRoots = [];
       showDbErrorBanner(error);
-      count.textContent = '0';
-      list.className = 'small text-danger';
-      list.textContent = 'Unable to load preview.';
     }
   }
 
-  // Generate Query function (now for continuous updates)
+  function bindRoleBlockEditor(block) {
+    const attrs = block.attributes || {};
+
+    renderTagList('attr-job-title-tags', attrs.job_title_display ? [attrs.job_title_display] : [], () => {
+      block.attributes.job_title_display = '';
+      block.attributes.job_code = '';
+      block.attributes.job_title_text = '';
+      markDirty();
+      bindRoleBlockEditor(block);
+      renderBlocksList();
+      updateRolePreview(block, false);
+      updateSQL();
+    });
+
+    wireValueSearch('attr-job-title', 'attr-job-title-suggestions', 'job_title', (value) => {
+      const parsed = parseJobDisplay(value);
+      block.attributes.job_title_display = value;
+      block.attributes.job_code = parsed.code;
+      block.attributes.job_title_text = parsed.title;
+      markDirty();
+      bindRoleBlockEditor(block);
+      renderBlocksList();
+      updateRolePreview(block, false);
+      updateSQL();
+    });
+
+    [['attr-bu-code', 'bu_code'], ['attr-company', 'company'], ['attr-tree-branch', 'tree_branch'], ['attr-department-id', 'department_id']].forEach(([id, key]) => {
+      const input = document.getElementById(id);
+      input.value = attrs[key] || '';
+      input.addEventListener('input', () => {
+        block.attributes[key] = input.value.trim();
+        markDirty();
+        renderBlocksList();
+        updateRolePreview(block, false);
+        updateSQL();
+      });
+    });
+
+    document.getElementById('role-direct-reports-only').addEventListener('change', () => {
+      block.direct_reports_only = document.getElementById('role-direct-reports-only').checked;
+      markDirty();
+      renderBlocksList();
+      updateSQL();
+    });
+
+    let expanded = false;
+    document.getElementById('toggle-role-preview').addEventListener('click', () => {
+      expanded = !expanded;
+      updateRolePreview(block, expanded);
+    });
+
+    bindFilterEditor(block);
+    updateRolePreview(block, false);
+  }
+
+  function bindManualIndividualsEditor(block) {
+    renderTagList('manual-person-tags', block.persons.map(p => `${p.first_name} ${p.last_name} (${p.username})`), (idx) => {
+      block.persons.splice(idx, 1);
+      markDirty();
+      bindManualIndividualsEditor(block);
+      renderBlocksList();
+      updateSQL();
+    });
+
+    wireEmployeeSearch('manual-person-search', 'manual-person-suggestions', (person) => {
+      if (!block.persons.find(p => p.id === person.id)) {
+        block.persons.push(person);
+        markDirty();
+        bindManualIndividualsEditor(block);
+        renderBlocksList();
+        updateSQL();
+      }
+    });
+  }
+
+  function bindFilterEditor(block) {
+    if (!block.filters) {
+      block.filters = defaultFilters();
+    }
+
+    const f = block.filters;
+    renderTagList('filter-job-titles-tags', f.job_titles_display || [], (idx) => {
+      f.job_titles_display.splice(idx, 1);
+      f.job_codes.splice(idx, 1);
+      markDirty();
+      bindFilterEditor(block);
+      renderBlocksList();
+      updateSQL();
+    });
+    renderTagList('filter-bu-codes-tags', f.bu_codes || [], (idx) => {
+      f.bu_codes.splice(idx, 1);
+      markDirty();
+      bindFilterEditor(block);
+      renderBlocksList();
+      updateSQL();
+    });
+    renderTagList('filter-companies-tags', f.companies || [], (idx) => {
+      f.companies.splice(idx, 1);
+      markDirty();
+      bindFilterEditor(block);
+      renderBlocksList();
+      updateSQL();
+    });
+    renderTagList('filter-tree-branches-tags', f.tree_branches || [], (idx) => {
+      f.tree_branches.splice(idx, 1);
+      markDirty();
+      bindFilterEditor(block);
+      renderBlocksList();
+      updateSQL();
+    });
+    renderTagList('filter-department-ids-tags', f.department_ids || [], (idx) => {
+      f.department_ids.splice(idx, 1);
+      markDirty();
+      bindFilterEditor(block);
+      renderBlocksList();
+      updateSQL();
+    });
+
+    wireValueSearch('filter-job-titles', 'filter-job-titles-suggestions', 'job_title', (value) => {
+      if (!f.job_titles_display.includes(value)) {
+        f.job_titles_display.push(value);
+        f.job_codes.push(parseJobDisplay(value).code || value);
+        markDirty();
+        bindFilterEditor(block);
+        renderBlocksList();
+        updateSQL();
+      }
+    });
+    wireValueSearch('filter-bu-codes', 'filter-bu-codes-suggestions', 'bu_code', (value) => {
+      if (!f.bu_codes.includes(value)) {
+        f.bu_codes.push(value);
+        markDirty();
+        bindFilterEditor(block);
+        renderBlocksList();
+        updateSQL();
+      }
+    });
+    wireValueSearch('filter-companies', 'filter-companies-suggestions', 'company', (value) => {
+      if (!f.companies.includes(value)) {
+        f.companies.push(value);
+        markDirty();
+        bindFilterEditor(block);
+        renderBlocksList();
+        updateSQL();
+      }
+    });
+    wireValueSearch('filter-tree-branches', 'filter-tree-branches-suggestions', 'tree_branch', (value) => {
+      if (!f.tree_branches.includes(value)) {
+        f.tree_branches.push(value);
+        markDirty();
+        bindFilterEditor(block);
+        renderBlocksList();
+        updateSQL();
+      }
+    });
+    wireValueSearch('filter-department-ids', 'filter-department-ids-suggestions', 'department_id', (value) => {
+      if (!f.department_ids.includes(value)) {
+        f.department_ids.push(value);
+        markDirty();
+        bindFilterEditor(block);
+        renderBlocksList();
+        updateSQL();
+      }
+    });
+
+    const select = document.getElementById('filter-full-part-time');
+    if (select) {
+      select.value = f.full_part_time || '';
+      select.addEventListener('change', () => {
+        f.full_part_time = select.value || '';
+        markDirty();
+        renderBlocksList();
+        updateSQL();
+      });
+    }
+  }
+
   async function updateSQL() {
     const preview = document.getElementById('sql-preview');
     const btnTest = document.getElementById('btn-test-query');
     const btnAccept = document.getElementById('btn-accept-sql');
+    const wholeCount = document.getElementById('whole-query-count');
 
-    // SQL changed; clear prior test-query count until re-run.
     resetTestResult();
+    wholeCount.style.display = 'none';
 
-    let mode, payload;
-
-    if (currentMode === 'by_person') {
-      if (selectedPersons.length === 0) {
-        // Clear SQL if no person selected
-        currentSQL = '';
-        preview.value = '';
-        btnTest.style.display = 'none';
-        btnAccept.style.display = 'none';
-        return;
-      }
-      mode = 'by_person';
-      payload = {
-        mode,
-        persons: selectedPersons.map(p => ({
-          person_id: p.id,
-          person_username: p.username
-        })),
-        selected_person_details: selectedPersons.map(p => ({
-          id: p.id,
-          first_name: p.first_name,
-          last_name: p.last_name,
-          username: p.username,
-          job_title: p.job_title || ''
-        })),
-        exclude_root: document.getElementById('person-exclude-root').checked,
-        direct_reports_only: document.getElementById('person-direct-reports-only').checked,
-      };
-    } else if (currentMode === 'by_role') {
-      mode = 'by_role';
-      const jobTitle = fieldTags['attr-job-title'][0] || '';
-      const parsedJob = parseJobDisplay(jobTitle);
-      const jobCode = parsedJob.code;
-      const jobTitleText = parsedJob.title;
-      const buCode = fieldTags['attr-bu-code'][0] || '';
-      const company = fieldTags['attr-company'][0] || '';
-      const branch = fieldTags['attr-tree-branch'][0] || '';
-      const departmentId = fieldTags['attr-department-id'][0] || '';
-
-      if (!jobTitle && !buCode && !company && !branch && !departmentId) {
-        // Clear SQL if no attributes
-        currentSQL = '';
-        preview.value = '';
-        btnTest.style.display = 'none';
-        btnAccept.style.display = 'none';
-        return;
-      }
-
-      payload = {
-        mode,
-        attributes_job_title: jobTitleText || null,
-        attributes_job_title_display: jobTitle || null,
-        attributes_job_code: jobCode || null,
-        attributes_job_title_text: jobTitleText || null,
-        attributes_bu_code: buCode || null,
-        attributes_company: company || null,
-        attributes_tree_branch: branch || null,
-        attributes_department_id: departmentId || null,
-        direct_reports_only: document.getElementById('role-direct-reports-only').checked,
-      };
-    } else if (currentMode === 'all_employees') {
-      mode = 'all_employees';
-      payload = { mode };
+    if (blocks.length === 0) {
+      currentSQL = '';
+      preview.value = '';
+      btnTest.style.display = 'none';
+      btnAccept.style.display = 'none';
+      return;
     }
 
-    // Add filters from tag fields
-    const filterJobDisplays = fieldTags['filter-job-titles'] || [];
-    payload.filter_job_titles = filterJobDisplays;
-    payload.filter_job_codes = filterJobDisplays
-      .map(v => parseJobDisplay(v).code)
-      .filter(v => !!v);
-    payload.filter_job_titles_display = filterJobDisplays;
-    payload.filter_bu_codes = fieldTags['filter-bu-codes'] || [];
-    payload.filter_companies = fieldTags['filter-companies'] || [];
-    payload.filter_tree_branches = fieldTags['filter-tree-branches'] || [];
-    payload.filter_department_ids = fieldTags['filter-department-ids'] || [];
-    payload.filter_full_part_time = document.getElementById('filter-full-part-time').value || null;
-    payload.additional_persons = selectedAdditionalPersons.map(p => ({
-      person_id: p.id,
-      person_username: p.username,
-    }));
-    payload.additional_person_details = selectedAdditionalPersons.map(p => ({
-      id: p.id,
-      first_name: p.first_name,
-      last_name: p.last_name,
-      username: p.username,
-      job_title: p.job_title || ''
-    }));
-    currentBuilderParams = JSON.parse(JSON.stringify(payload));
-
-    // Remove UI-only fields before preview generation call.
-    const previewPayload = JSON.parse(JSON.stringify(payload));
-    delete previewPayload.selected_person_details;
-    delete previewPayload.additional_person_details;
-    delete previewPayload.filter_job_titles_display;
-
     try {
+      clearDbErrorBanner();
       const response = await fetch('/api/generate-builder-sql', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(previewPayload)
+        body: JSON.stringify(builderPayload()),
       });
-
       const data = await response.json();
       if (data.error) {
         showDbErrorBanner(data.error);
-        preview.value = 'Error: ' + data.error;
+        preview.value = `Error: ${data.error}`;
         btnTest.style.display = 'none';
         btnAccept.style.display = 'none';
         return;
@@ -915,28 +1130,35 @@
       btnAccept.style.display = 'inline-block';
     } catch (error) {
       showDbErrorBanner(error);
-      preview.value = 'Error generating SQL: ' + error;
+      preview.value = `Error generating SQL: ${error}`;
       btnTest.style.display = 'none';
       btnAccept.style.display = 'none';
     }
   }
 
-  // Test Query
+  async function runCountForSql(sql) {
+    const response = await fetch('/api/test-query', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sql }),
+    });
+    return response.json();
+  }
+
   document.getElementById('btn-test-query').addEventListener('click', async () => {
     const testResult = document.getElementById('test-result');
+    const wholeCount = document.getElementById('whole-query-count');
+    if (!currentSQL) return;
     try {
-      const response = await fetch('/api/test-query', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sql: currentSQL })
-      });
-
-      const data = await response.json();
+      clearDbErrorBanner();
+      const data = await runCountForSql(currentSQL);
       if (data.error) {
         showDbErrorBanner(data.error);
         testResult.innerHTML = `<strong class="text-danger">Error:</strong> ${data.error}`;
       } else {
         testResult.innerHTML = `<strong>Result:</strong> ${data.count} records found`;
+        wholeCount.textContent = `Query Count: ${data.count}`;
+        wholeCount.style.display = 'inline-block';
       }
       testResult.style.display = 'block';
     } catch (error) {
@@ -946,75 +1168,10 @@
     }
   });
 
-  function applyBuilderParams(params) {
-    if (!params || typeof params !== 'object') return;
-
-    const mode = params.mode || 'by_person';
-    if (mode === 'by_role' || mode === 'by_attributes') {
-      activateModeTab('by_role');
-    } else if (mode === 'all_employees') {
-      activateModeTab('all_employees');
-    } else {
-      activateModeTab('by_person');
-    }
-
-    selectedPersons = Array.isArray(params.selected_person_details) ? params.selected_person_details : [];
-    updatePersonTagsDisplay();
-    selectedAdditionalPersons = Array.isArray(params.additional_person_details) ? params.additional_person_details : [];
-    updateAdditionalPersonTagsDisplay();
-
-    const displayAttrJob = params.attributes_job_title_display
-      || params.attributes_job_title
-      || ((params.attributes_job_code || '') + ((params.attributes_job_title_text || '') ? ` - ${params.attributes_job_title_text}` : '')).trim();
-
-    const displayFilterJobs = (Array.isArray(params.filter_job_titles_display) && params.filter_job_titles_display.length > 0)
-      ? params.filter_job_titles_display
-      : ((params.filter_job_codes || params.filter_job_titles || []).map((code, i) => {
-          const titles = params.filter_job_titles || [];
-          const maybeTitle = titles[i];
-          if (typeof maybeTitle === 'string' && maybeTitle.includes(' - ')) {
-            return maybeTitle;
-          }
-          return maybeTitle ? `${code} - ${maybeTitle}` : code;
-        }));
-
-    const restoreFields = [
-      ['attr-job-title', displayAttrJob ? [displayAttrJob] : []],
-      ['attr-bu-code', params.attributes_bu_code ? [params.attributes_bu_code] : []],
-      ['attr-company', params.attributes_company ? [params.attributes_company] : []],
-      ['attr-tree-branch', params.attributes_tree_branch ? [params.attributes_tree_branch] : []],
-      ['attr-department-id', params.attributes_department_id ? [params.attributes_department_id] : []],
-      ['filter-job-titles', displayFilterJobs || []],
-      ['filter-bu-codes', params.filter_bu_codes || []],
-      ['filter-companies', params.filter_companies || []],
-      ['filter-tree-branches', params.filter_tree_branches || []],
-      ['filter-department-ids', params.filter_department_ids || []],
-    ];
-
-    restoreFields.forEach(([fieldId, values]) => {
-      fieldTags[fieldId] = Array.isArray(values) ? values : [];
-      updateTagsDisplay(fieldId);
-      const input = document.getElementById(fieldId);
-      if (input) {
-        input.value = fieldTags[fieldId].join(', ');
-      }
-    });
-
-    document.getElementById('person-exclude-root').checked = !!params.exclude_root;
-    document.getElementById('person-direct-reports-only').checked = !!params.direct_reports_only;
-    document.getElementById('role-direct-reports-only').checked = !!params.direct_reports_only;
-    document.getElementById('filter-full-part-time').value = params.filter_full_part_time || '';
-
-    updateRolePreview();
-    updateSQL();
-  }
-
-  // Accept builder params
   document.getElementById('btn-accept-sql').addEventListener('click', () => {
-    if (currentBuilderParams) {
-      sessionStorage.setItem('accepted_query_builder_params', JSON.stringify(currentBuilderParams));
-    }
-    // Try to get the return path, otherwise go back
+    allowExit = true;
+    markSaved();
+    sessionStorage.setItem('accepted_query_builder_params', JSON.stringify(builderPayload()));
     const returnTo = sessionStorage.getItem('return_to');
     if (returnTo) {
       sessionStorage.removeItem('return_to');
@@ -1024,9 +1181,8 @@
     }
   });
 
-  // Edit SQL
   document.getElementById('btn-edit-sql').addEventListener('click', () => {
-    // Store current SQL in sessionStorage and redirect to group creation/edit
+    allowExit = true;
     if (currentSQL) {
       sessionStorage.setItem('accepted_query_sql', currentSQL);
     }
@@ -1039,25 +1195,158 @@
     }
   });
 
-  // Cancel
   document.getElementById('btn-cancel').addEventListener('click', () => {
-    if (confirm('Discard changes?')) {
+    if (confirmLeaveIfDirty()) {
+      allowExit = true;
       window.history.back();
     }
   });
 
-  // Initialize from saved params when opened from group screens.
+  document.getElementById('btn-add-block').addEventListener('click', () => {
+    const type = document.getElementById('add-block-select').value || 'hierarchy_by_person';
+    blocks.push(createBlock(type));
+    selectedBlockIndex = blocks.length - 1;
+    markDirty();
+    clearDbErrorBanner();
+    renderBlocksList();
+    renderBlockEditor();
+    updateSQL();
+  });
+
+  document.getElementById('blocks-list').addEventListener('click', (event) => {
+    const button = event.target.closest('button[data-action]');
+    if (!button) return;
+    const action = button.getAttribute('data-action');
+    const index = Number(button.getAttribute('data-index'));
+    if (!Number.isInteger(index)) return;
+
+    if (action === 'remove') {
+      removeBlock(index);
+    }
+  });
+
+  document.querySelectorAll('a[href]').forEach((link) => {
+    link.addEventListener('click', (event) => {
+      if (!confirmLeaveIfDirty()) {
+        event.preventDefault();
+      }
+    });
+  });
+
+  window.addEventListener('beforeunload', (event) => {
+    if (!hasUnsavedChanges || allowExit) {
+      return;
+    }
+    event.preventDefault();
+    event.returnValue = '';
+  });
+
+  function upgradeLegacyParams(params) {
+    if (!params || typeof params !== 'object') return null;
+    if (Array.isArray(params.blocks)) {
+      return { version: 2, blocks: params.blocks.map(block => ({
+        id: block.id || newId(),
+        ...createBlock(block.type || 'filtered_population'),
+        ...block,
+        persons: normalizePersons(block.persons || block.selected_person_details || []),
+      })) };
+    }
+
+    if (!params.mode) {
+      return null;
+    }
+
+    const out = { version: 2, blocks: [] };
+    if (params.mode === 'by_person') {
+      out.blocks.push({
+        ...createBlock('hierarchy_by_person'),
+        persons: Array.isArray(params.selected_person_details) ? params.selected_person_details : [],
+        exclude_root: !!params.exclude_root,
+        direct_reports_only: !!params.direct_reports_only,
+        filters: {
+          ...defaultFilters(),
+          job_titles_display: params.filter_job_titles_display || params.filter_job_titles || [],
+          job_codes: params.filter_job_codes || [],
+          bu_codes: params.filter_bu_codes || [],
+          companies: params.filter_companies || [],
+          tree_branches: params.filter_tree_branches || [],
+          department_ids: params.filter_department_ids || [],
+          full_part_time: params.filter_full_part_time || '',
+        },
+      });
+    } else if (params.mode === 'by_role' || params.mode === 'by_attributes') {
+      out.blocks.push({
+        ...createBlock('hierarchy_by_role'),
+        attributes: {
+          job_title_display: params.attributes_job_title_display || '',
+          job_code: params.attributes_job_code || '',
+          job_title_text: params.attributes_job_title_text || params.attributes_job_title || '',
+          bu_code: params.attributes_bu_code || '',
+          company: params.attributes_company || '',
+          tree_branch: params.attributes_tree_branch || '',
+          department_id: params.attributes_department_id || '',
+        },
+        direct_reports_only: !!params.direct_reports_only,
+        filters: {
+          ...defaultFilters(),
+          job_titles_display: params.filter_job_titles_display || params.filter_job_titles || [],
+          job_codes: params.filter_job_codes || [],
+          bu_codes: params.filter_bu_codes || [],
+          companies: params.filter_companies || [],
+          tree_branches: params.filter_tree_branches || [],
+          department_ids: params.filter_department_ids || [],
+          full_part_time: params.filter_full_part_time || '',
+        },
+      });
+    } else {
+      out.blocks.push({
+        ...createBlock('filtered_population'),
+        filters: {
+          ...defaultFilters(),
+          job_titles_display: params.filter_job_titles_display || params.filter_job_titles || [],
+          job_codes: params.filter_job_codes || [],
+          bu_codes: params.filter_bu_codes || [],
+          companies: params.filter_companies || [],
+          tree_branches: params.filter_tree_branches || [],
+          department_ids: params.filter_department_ids || [],
+          full_part_time: params.filter_full_part_time || '',
+        },
+      });
+    }
+
+    if (Array.isArray(params.additional_person_details) && params.additional_person_details.length > 0) {
+      out.blocks.push({
+        ...createBlock('manual_individuals'),
+        persons: normalizePersons(params.additional_person_details),
+      });
+    }
+
+    return out;
+  }
+
   const initialParamsRaw = sessionStorage.getItem('query_builder_initial_params');
   if (initialParamsRaw) {
     try {
       const initialParams = JSON.parse(initialParamsRaw);
-      if (initialParams && Object.keys(initialParams).length > 0) {
-        applyBuilderParams(initialParams);
+      const upgraded = upgradeLegacyParams(initialParams);
+      if (upgraded && Array.isArray(upgraded.blocks)) {
+        blocks = upgraded.blocks.map(block => ({
+          ...createBlock(block.type || 'filtered_population'),
+          ...block,
+          id: block.id || newId(),
+        }));
+        selectedBlockIndex = blocks.length > 0 ? 0 : -1;
+        markSaved();
       }
     } catch (_) {
       // Ignore malformed initial params.
     }
     sessionStorage.removeItem('query_builder_initial_params');
   }
+
+  renderBlocksList();
+  renderBlockEditor();
+  updateSQL();
+  markSaved();
 </script>
 {% endblock %}

@@ -31,6 +31,8 @@ class Group:
     def _builder_payload_for_sql(self) -> dict:
         payload = self.config.get("query_builder") or {}
         allowed = {
+            "version",
+            "blocks",
             "mode",
             "persons",
             "additional_persons",

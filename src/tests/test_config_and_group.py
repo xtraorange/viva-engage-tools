@@ -75,9 +75,25 @@ def test_group_generates_query_from_saved_builder_params(tmp_path):
         "display_name": "Generated Group",
         "tags": ["x"],
         "query_builder": {
-            "mode": "by_role",
-            "attributes_job_code": "000545",
-            "attributes_department_id": "02SA23",
+            "version": 2,
+            "blocks": [
+                {
+                    "type": "hierarchy_by_role",
+                    "attributes": {
+                        "job_code": "000545",
+                        "department_id": "02SA23",
+                    },
+                    "filters": {
+                        "job_titles_display": [],
+                        "job_codes": [],
+                        "bu_codes": [],
+                        "companies": [],
+                        "tree_branches": [],
+                        "department_ids": [],
+                        "full_part_time": "",
+                    },
+                }
+            ],
         },
     }
     (folder / "group.yaml").write_text(yaml.safe_dump(cfg), encoding="utf-8")
@@ -116,8 +132,15 @@ def test_remove_override_keeps_query_builder_params(tmp_path):
         "display_name": "Keep Params",
         "tags": [],
         "query_builder": {
-            "mode": "by_role",
-            "attributes_job_code": "000545",
+            "version": 2,
+            "blocks": [
+                {
+                    "type": "hierarchy_by_role",
+                    "attributes": {
+                        "job_code": "000545",
+                    },
+                }
+            ],
         },
     }
     (group_dir / "group.yaml").write_text(yaml.safe_dump(cfg), encoding="utf-8")
@@ -133,4 +156,6 @@ def test_remove_override_keeps_query_builder_params(tmp_path):
     g2 = svc.get_group("keep_params")
     assert g2 is not None
     assert not g2.has_override_query()
-    assert g2.config.get("query_builder", {}).get("attributes_job_code") == "000545"
+    blocks = g2.config.get("query_builder", {}).get("blocks", [])
+    assert blocks
+    assert blocks[0].get("attributes", {}).get("job_code") == "000545"

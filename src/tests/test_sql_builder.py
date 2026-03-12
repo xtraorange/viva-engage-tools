@@ -103,3 +103,103 @@ def test_direct_reports_only_and_additional_people_can_coexist():
     )
     assert "SUPERVISOR_ID IN" in sql
     assert "99999" in sql
+
+
+def test_block_builder_generation_unions_in_order_and_dedupes():
+    sql = generate_safe_hierarchy_sql(
+        blocks=[
+            {
+                "type": "manual_individuals",
+                "name": "First",
+                "persons": [{"person_username": "alice"}],
+            },
+            {
+                "type": "manual_individuals",
+                "name": "Second",
+                "persons": [{"person_username": "bob"}],
+            },
+        ]
+    )
+    assert "-- Block 1: First" in sql
+    assert "-- Block 2: Second" in sql
+    assert "UNION" in sql
+    assert "SELECT DISTINCT merged.USERNAME" in sql
+    assert "alice" in sql
+    assert "bob" in sql
+
+
+def test_block_builder_role_block_with_filters():
+    sql = generate_safe_hierarchy_sql(
+        blocks=[
+            {
+                "type": "hierarchy_by_role",
+                "attributes": {
+                    "job_code": "000545",
+                    "department_id": "02SA23",
+                },
+                "filters": {
+                    "job_titles_display": ["000760 - Some Title"],
+                    "bu_codes": ["BU1"],
+                },
+            }
+        ]
+    )
+    assert "JOB_CODE = '000545'" in sql
+    assert "DEPARTMENT_ID = '02SA23'" in sql
+    assert "cte.JOB_CODE IN ('000760')" in sql
+    assert "cte.BU_CODE IN ('BU1')" in sql
+
+
+def test_block_builder_ignores_empty_manual_individuals_block():
+    sql = generate_safe_hierarchy_sql(
+        blocks=[
+            {
+                "type": "manual_individuals",
+                "name": "Manual",
+                "persons": [],
+            },
+            {
+                "type": "hierarchy_by_role",
+                "attributes": {"job_code": "000545"},
+            },
+        ]
+    )
+    assert "JOB_CODE = '000545'" in sql
+    assert "Manual individuals block requires" not in sql
+
+
+def test_block_builder_ignores_empty_hierarchy_by_person_block():
+    sql = generate_safe_hierarchy_sql(
+        blocks=[
+            {
+                "type": "hierarchy_by_person",
+                "name": "By Person",
+                "persons": [],
+            },
+            {
+                "type": "hierarchy_by_role",
+                "attributes": {"job_code": "000545"},
+            },
+        ]
+    )
+    assert "JOB_CODE = '000545'" in sql
+    assert "-- Block 1: By Person (skipped: no qualifying selections)" in sql
+
+
+def test_block_builder_ignores_empty_hierarchy_by_role_block():
+    sql = generate_safe_hierarchy_sql(
+        blocks=[
+            {
+                "type": "hierarchy_by_role",
+                "name": "By Role",
+                "attributes": {},
+            },
+            {
+                "type": "manual_individuals",
+                "name": "Manual",
+                "persons": [{"person_username": "alice"}],
+            },
+        ]
+    )
+    assert "alice" in sql
+    assert "-- Block 1: By Role (skipped: no qualifying selections)" in sql
