@@ -31,7 +31,7 @@ exit /b %errorlevel%
 if exist "%VENV_PYTHON%" goto :eof
 
 echo [INFO] First run detected. Installing dependencies...
-powershell -NoProfile -ExecutionPolicy Bypass -File "%INSTALL_SCRIPT%" -TargetDir "%ROOT_DIR%" -SkipClone
+powershell -NoProfile -ExecutionPolicy Bypass -File "%INSTALL_SCRIPT%" -TargetDir "%ROOT_DIR%" -SkipClone -NoLaunch
 if errorlevel 1 (
     echo [ERROR] Automatic setup failed.
     pause

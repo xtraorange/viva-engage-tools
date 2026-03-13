@@ -4,7 +4,8 @@
 
 param(
     [string]$TargetDir = "$env:USERPROFILE\viva-engage-tools",
-    [switch]$SkipClone
+    [switch]$SkipClone,
+    [switch]$NoLaunch
 )
 
 $ErrorActionPreference = 'Stop'
@@ -100,11 +101,15 @@ Write-Host 'Installing dependencies...' -ForegroundColor Yellow
 & $venvPython -m pip install -r requirements.txt
 
 Write-Section 'Install Complete'
-Write-Host 'Launching application...' -ForegroundColor Green
-
-$startBat = Join-Path (Get-Location) 'start.bat'
-if (Test-Path $startBat) {
-    Start-Process -FilePath 'cmd.exe' -ArgumentList '/c', $startBat
+if ($NoLaunch) {
+    Write-Host 'Install finished. Returning to caller without launching start.bat.' -ForegroundColor Green
 } else {
-    Write-Host 'start.bat not found. Navigate to the install folder and double-click start.bat to launch.' -ForegroundColor Yellow
+    Write-Host 'Launching application...' -ForegroundColor Green
+
+    $startBat = Join-Path (Get-Location) 'start.bat'
+    if (Test-Path $startBat) {
+        Start-Process -FilePath 'cmd.exe' -ArgumentList '/c', $startBat
+    } else {
+        Write-Host 'start.bat not found. Navigate to the install folder and double-click start.bat to launch.' -ForegroundColor Yellow
+    }
 }

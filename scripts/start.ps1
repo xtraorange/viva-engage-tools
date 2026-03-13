@@ -14,8 +14,108 @@ $script:RuntimeInfoPath = Join-Path $RootDir '.runtime\ui.json'
 $script:RuntimeLogPath = Join-Path $RootDir '.runtime\server.err.log'
 $script:BannerTopRow = -1
 $global:CurrentServerPid = $null
+$script:JobHandle = [IntPtr]::Zero
 
-# Ensure the child server process never outlives this launcher window.
+$jobTypeSource = @"
+using System;
+using System.Runtime.InteropServices;
+
+public static class JobObjectNative {
+    [StructLayout(LayoutKind.Sequential)]
+    public struct JOBOBJECT_BASIC_LIMIT_INFORMATION {
+        public long PerProcessUserTimeLimit;
+        public long PerJobUserTimeLimit;
+        public uint LimitFlags;
+        public UIntPtr MinimumWorkingSetSize;
+        public UIntPtr MaximumWorkingSetSize;
+        public uint ActiveProcessLimit;
+        public long Affinity;
+        public uint PriorityClass;
+        public uint SchedulingClass;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    public struct IO_COUNTERS {
+        public ulong ReadOperationCount;
+        public ulong WriteOperationCount;
+        public ulong OtherOperationCount;
+        public ulong ReadTransferCount;
+        public ulong WriteTransferCount;
+        public ulong OtherTransferCount;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    public struct JOBOBJECT_EXTENDED_LIMIT_INFORMATION {
+        public JOBOBJECT_BASIC_LIMIT_INFORMATION BasicLimitInformation;
+        public IO_COUNTERS IoInfo;
+        public UIntPtr ProcessMemoryLimit;
+        public UIntPtr JobMemoryLimit;
+        public UIntPtr PeakProcessMemoryUsed;
+        public UIntPtr PeakJobMemoryUsed;
+    }
+
+    public const int JobObjectExtendedLimitInformation = 9;
+    public const uint JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE = 0x00002000;
+
+    [DllImport("kernel32.dll", CharSet = CharSet.Unicode)]
+    public static extern IntPtr CreateJobObject(IntPtr lpJobAttributes, string lpName);
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    public static extern bool SetInformationJobObject(IntPtr hJob, int JobObjectInfoClass, IntPtr lpJobObjectInfo, uint cbJobObjectInfoLength);
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    public static extern bool AssignProcessToJobObject(IntPtr hJob, IntPtr hProcess);
+}
+"@
+
+if (-not ("JobObjectNative" -as [type])) {
+    Add-Type -TypeDefinition $jobTypeSource
+}
+
+function New-KillOnCloseJob {
+    $job = [JobObjectNative]::CreateJobObject([IntPtr]::Zero, $null)
+    if ($job -eq [IntPtr]::Zero) {
+        throw 'Failed to create Windows job object for process lifetime control.'
+    }
+
+    $info = New-Object JobObjectNative+JOBOBJECT_EXTENDED_LIMIT_INFORMATION
+    $info.BasicLimitInformation.LimitFlags = [JobObjectNative]::JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE
+
+    $length = [Runtime.InteropServices.Marshal]::SizeOf([type]'JobObjectNative+JOBOBJECT_EXTENDED_LIMIT_INFORMATION')
+    $ptr = [Runtime.InteropServices.Marshal]::AllocHGlobal($length)
+    try {
+        [Runtime.InteropServices.Marshal]::StructureToPtr($info, $ptr, $false)
+        $ok = [JobObjectNative]::SetInformationJobObject($job, [JobObjectNative]::JobObjectExtendedLimitInformation, $ptr, [uint32]$length)
+        if (-not $ok) {
+            throw 'Failed to configure Windows job object limits.'
+        }
+    } finally {
+        [Runtime.InteropServices.Marshal]::FreeHGlobal($ptr)
+    }
+
+    return $job
+}
+
+function Add-ProcessToJob {
+    param(
+        [int]$ProcessId,
+        [IntPtr]$JobHandle
+    )
+
+    if ($JobHandle -eq [IntPtr]::Zero) {
+        throw 'Invalid job handle.'
+    }
+
+    $proc = Get-Process -Id $ProcessId -ErrorAction Stop
+    $assigned = [JobObjectNative]::AssignProcessToJobObject($JobHandle, $proc.Handle)
+    if (-not $assigned) {
+        throw "Failed to assign process $ProcessId to launcher job object."
+    }
+}
+
+$script:JobHandle = New-KillOnCloseJob
+
+# Best-effort shutdown hook for clean exits; hard closes are handled by the job object.
 Register-EngineEvent -SourceIdentifier PowerShell.Exiting -Action {
     if ($global:CurrentServerPid) {
         Stop-Process -Id $global:CurrentServerPid -Force -ErrorAction SilentlyContinue
@@ -156,14 +256,16 @@ function Start-ServerProcess {
     $stdoutLog = Join-Path $RootDir '.runtime\server.out.log'
     $stderrLog = $script:RuntimeLogPath
 
-    return Start-Process -FilePath $pythonExe -ArgumentList '-m', 'src.ui' -WorkingDirectory $RootDir -PassThru -WindowStyle Hidden -RedirectStandardOutput $stdoutLog -RedirectStandardError $stderrLog
+    $proc = Start-Process -FilePath $pythonExe -ArgumentList '-m', 'src.ui' -WorkingDirectory $RootDir -PassThru -WindowStyle Hidden -RedirectStandardOutput $stdoutLog -RedirectStandardError $stderrLog
+    Add-ProcessToJob -ProcessId $proc.Id -JobHandle $script:JobHandle
+    return $proc
 }
 
 Clear-Host
 
 # Clean up any stale state from a previous session that may have been killed mid-restart.
 Remove-Item (Join-Path $RootDir 'restart.flag') -Force -ErrorAction SilentlyContinue
-$env:VIVA_ENGAGE_TOOLS_SKIP_BROWSER = ''
+$env:JAMPY_SKIP_BROWSER = ''
 
 while ($true) {
     $server = Start-ServerProcess
@@ -199,10 +301,10 @@ while ($true) {
         Remove-Item (Join-Path $RootDir 'restart.flag') -Force -ErrorAction SilentlyContinue
 
         if ($restartMode -eq 'restart:no-browser') {
-            $env:VIVA_ENGAGE_TOOLS_SKIP_BROWSER = '1'
+            $env:JAMPY_SKIP_BROWSER = '1'
             $script:StatusBase = 'Restarting (reconnecting current tab)'
         } else {
-            $env:VIVA_ENGAGE_TOOLS_SKIP_BROWSER = ''
+            $env:JAMPY_SKIP_BROWSER = ''
             $script:StatusBase = 'Restarting'
         }
 
