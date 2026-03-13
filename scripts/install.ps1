@@ -111,10 +111,15 @@ if ($NoLaunch) {
 } else {
     $startBat = Join-Path (Get-Location) 'start.bat'
     if (Test-Path $startBat) {
-        Write-Host '  Press any key to launch the server, or close this window to exit.' -ForegroundColor Cyan
+        Write-Host '  Next time, launch the server by double-clicking start.bat in that folder.' -ForegroundColor DarkGray
+        Write-Host ''
+        Write-Host '  Press any key to launch now — this window will close automatically.' -ForegroundColor Cyan
         $null = $Host.UI.RawUI.ReadKey('NoEcho,IncludeKeyDown')
         Start-Process -FilePath 'cmd.exe' -ArgumentList '/c', $startBat
+
     } else {
         Write-Host 'start.bat not found. Navigate to the install folder and double-click start.bat to launch.' -ForegroundColor Yellow
+        $null = $Host.UI.RawUI.ReadKey('NoEcho,IncludeKeyDown')
     }
+            exit 0
 }
