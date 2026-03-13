@@ -90,19 +90,23 @@
 
     function renderSuggestions(query) {
       var normalized = String(query || '').trim().toLowerCase();
-      if (!normalized) {
-        hideSuggestions();
-        return;
-      }
+      var showAllOnEmpty = options.showAllOnEmpty !== false;
 
       var matches = allTags
         .filter(function (tag) {
           var alreadyAdded = state.tags.some(function (existing) {
             return existing.toLowerCase() === String(tag).toLowerCase();
           });
-          return !alreadyAdded && String(tag).toLowerCase().includes(normalized);
+          if (alreadyAdded) return false;
+          if (!normalized) return showAllOnEmpty;
+          return String(tag).toLowerCase().includes(normalized);
         })
         .slice(0, 10);
+
+      if (!normalized && !showAllOnEmpty) {
+        hideSuggestions();
+        return;
+      }
 
       if (matches.length === 0) {
         suggestions.innerHTML = '<div class="list-group-item text-muted">Press Enter to add this tag</div>';
@@ -144,6 +148,10 @@
 
     input.addEventListener('input', function (event) {
       renderSuggestions(event.target.value);
+    });
+
+    input.addEventListener('focus', function () {
+      renderSuggestions(input.value || '');
     });
 
     input.addEventListener('blur', function () {

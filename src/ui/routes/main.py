@@ -324,6 +324,9 @@ def init_main_routes(app, base_path: str):
         """Export reviewed ad hoc match results as CSV."""
         state_token = request.form.get("state_token", "").strip()
         raw_overrides = request.form.get("selection_overrides_json", "")
+        download_scope = request.form.get("download_scope", "all").strip().lower()
+        if download_scope not in {"all", "matched", "needs_review"}:
+            download_scope = "all"
         selected_fields = [field.strip() for field in request.form.get("selected_fields_csv", "").split(",") if field.strip() in EXPORTABLE_FIELDS]
         if not state_token:
             return redirect(url_for("main.adhoc_match"))
@@ -345,10 +348,26 @@ def init_main_routes(app, base_path: str):
         rows = state.get("rows") or []
         output = io.StringIO()
         writer = csv.writer(output)
-        writer.writerow(headers + [EXPORTABLE_FIELDS[field] for field in selected_fields])
+        writer.writerow(["Original Row #"] + headers + [EXPORTABLE_FIELDS[field] for field in selected_fields])
+
+        def _export_row_values(row, selected_index, selected_candidate=None):
+            original = row.get("original") or {}
+            matches = row.get("matches") or []
+            has_selected_match = isinstance(selected_index, int) and 0 <= selected_index < len(matches)
+            selected = selected_candidate if selected_candidate is not None else (matches[selected_index] if has_selected_match else {})
+            export_values = []
+            for field in selected_fields:
+                if field == "match_method":
+                    if selected_candidate is not None:
+                        export_values.append("Review Candidate")
+                    else:
+                        export_values.append(_describe_match_method(row, selected_index, has_selected_match))
+                else:
+                    export_values.append(selected.get(field, ""))
+            row_number = int(row.get("row_index", 0)) + 1
+            return [row_number] + [original.get(header, "") for header in headers] + export_values
 
         for row in rows:
-            original = row.get("original") or {}
             matches = row.get("matches") or []
             selected_index = row.get("selected_index")
             override_key = str(row.get("row_index"))
@@ -360,15 +379,21 @@ def init_main_routes(app, base_path: str):
                     selected_index = int(override_value)
                 else:
                     selected_index = None
+
             has_selected_match = isinstance(selected_index, int) and 0 <= selected_index < len(matches)
-            selected = matches[selected_index] if has_selected_match else {}
-            export_values = []
-            for field in selected_fields:
-                if field == "match_method":
-                    export_values.append(_describe_match_method(row, selected_index, has_selected_match))
-                else:
-                    export_values.append(selected.get(field, ""))
-            writer.writerow([original.get(header, "") for header in headers] + export_values)
+            needs_review = not has_selected_match
+
+            if download_scope == "matched" and not has_selected_match:
+                continue
+            if download_scope == "needs_review" and not needs_review:
+                continue
+
+            if download_scope == "needs_review" and needs_review and len(matches) > 1:
+                for candidate in matches:
+                    writer.writerow(_export_row_values(row, selected_index, selected_candidate=candidate))
+                continue
+
+            writer.writerow(_export_row_values(row, selected_index))
 
         buffer = io.BytesIO(output.getvalue().encode("utf-8-sig"))
         buffer.seek(0)

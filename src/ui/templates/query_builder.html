@@ -25,12 +25,13 @@
             <div class="d-flex flex-wrap align-items-center gap-2">
               <label for="add-block-select" class="form-label mb-0">Add source blocks</label>
               <select id="add-block-select" class="form-select form-select-sm" style="max-width: 280px;">
-            <option value="hierarchy_by_person">Hierarchy by Person</option>
             <option value="hierarchy_by_role">Hierarchy by Role</option>
+            <option value="hierarchy_by_person">Hierarchy by Person</option>
             <option value="filtered_population">All Employees with Filters</option>
             <option value="manual_individuals">Manual Individuals</option>
               </select>
               <button type="button" class="btn btn-sm btn-primary" id="btn-add-block">Add Block</button>
+              <button type="button" class="btn btn-sm btn-outline-secondary ms-auto" id="btn-refresh-all-block-counts">Refresh All Block Counts</button>
             </div>
           </div>
         </div>
@@ -183,6 +184,19 @@
     return `b_${Date.now()}_${Math.random().toString(16).slice(2)}`;
   }
 
+  function countChipHtml(block, index) {
+    if (block.is_counting) {
+      return `
+        <button type="button" class="badge bg-light text-dark border-0" data-action="count" data-index="${index}" title="Recalculate this block count" disabled>
+          <span class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>
+          Counting...
+        </button>
+      `;
+    }
+    const label = block.last_count === null ? 'Count: --' : `Count: ${block.last_count}`;
+    return `<button type="button" class="badge bg-light text-dark border-0" data-action="count" data-index="${index}" title="Recalculate this block count">${label}</button>`;
+  }
+
   function defaultFilters() {
     return {
       job_titles_display: [],
@@ -291,8 +305,9 @@
   }
 
   function blockSummary(block) {
+    const filterLines = filterSummaryLines(block);
     if (block.type === 'hierarchy_by_person') {
-      return `${block.persons.length} selected person(s)`;
+      return [`${block.persons.length} selected person(s)`, ...filterLines].join('\n');
     }
     if (block.type === 'hierarchy_by_role') {
       const attrs = normalizeRoleAttributes(block.attributes);
@@ -304,12 +319,39 @@
         ...(attrs.department_ids || []),
       ].filter(Boolean);
       const root = parts.length > 0 ? parts.join(' | ') : 'No role attributes selected';
-      return `${root} | Root matches: ${block.root_preview_count || 0}`;
+      return [`${root} | Root matches: ${block.root_preview_count || 0}`, ...filterLines].join('\n');
     }
     if (block.type === 'filtered_population') {
-      return blockHasFilters(block) ? 'All employees with filters applied' : 'All active employees';
+      const base = 'All Employees';
+      return [base, ...filterLines].join('\n');
     }
     return `${block.persons.length} manual individual(s)`;
+  }
+
+  function filterSummaryLines(block) {
+    const f = (block && block.filters) || {};
+    const lines = [];
+
+    if (Array.isArray(f.job_titles_display) && f.job_titles_display.length > 0) {
+      lines.push(`Filters: Job Titles/Codes: ${f.job_titles_display.join(', ')}`);
+    }
+    if (Array.isArray(f.bu_codes) && f.bu_codes.length > 0) {
+      lines.push(`Filters: Business Units: ${f.bu_codes.join(', ')}`);
+    }
+    if (Array.isArray(f.companies) && f.companies.length > 0) {
+      lines.push(`Filters: Companies: ${f.companies.join(', ')}`);
+    }
+    if (Array.isArray(f.tree_branches) && f.tree_branches.length > 0) {
+      lines.push(`Filters: Tree Branches: ${f.tree_branches.join(', ')}`);
+    }
+    if (Array.isArray(f.department_ids) && f.department_ids.length > 0) {
+      lines.push(`Filters: Department IDs: ${f.department_ids.join(', ')}`);
+    }
+    if (f.full_part_time) {
+      lines.push(`Filters: Full/Part Time: ${f.full_part_time === 'F' ? 'Full Time' : (f.full_part_time === 'P' ? 'Part Time' : f.full_part_time)}`);
+    }
+
+    return lines;
   }
 
   function normalizePersons(persons) {
@@ -456,7 +498,6 @@
 
     list.innerHTML = blocks.map((block, index) => {
       const selectedClass = index === selectedBlockIndex ? 'block-selected' : '';
-      const countLabel = block.last_count === null ? 'Count: --' : `Count: ${block.last_count}`;
       const warn = isUnfinishedBlock(block)
         ? `<span class="block-warn" title="${unfinishedReason(block)}">&#9888;</span>`
         : '';
@@ -465,9 +506,9 @@
           <div class="d-flex justify-content-between align-items-start gap-2">
             <div>
               <div class="fw-semibold">${index + 1}. ${BLOCK_TYPES[block.type]}${warn}</div>
-              <div class="small text-muted">${blockSummary(block)}</div>
+              <div class="small text-muted" style="white-space: pre-line;">${blockSummary(block)}</div>
             </div>
-            <span class="badge bg-light text-dark">${countLabel}</span>
+            ${countChipHtml(block, index)}
           </div>
           <div class="mt-2 d-flex justify-content-end flex-wrap gap-1">
             <button type="button" class="btn btn-sm btn-outline-secondary" data-action="duplicate" data-index="${index}">Duplicate</button>
@@ -479,7 +520,7 @@
 
     list.querySelectorAll('.block-card').forEach((card) => {
       card.addEventListener('click', (event) => {
-        if (event.target.closest('button[data-action="remove"]')) {
+        if (event.target.closest('button[data-action]')) {
           return;
         }
         const idx = Number(card.getAttribute('data-block-index'));
@@ -900,41 +941,77 @@
     wireBlockCountPreview();
   }
 
+  function setEditorBlockCountLoading(isLoading) {
+    const countChip = document.getElementById('current-block-count');
+    if (!countChip || selectedBlockIndex < 0 || selectedBlockIndex >= blocks.length) return;
+    const block = blocks[selectedBlockIndex];
+    if (isLoading) {
+      countChip.innerHTML = '<span class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>Query Count: calculating...';
+      return;
+    }
+    countChip.textContent = `Query Count: ${block.last_count === null ? '--' : block.last_count}`;
+  }
+
+  async function recalcBlockCount(index) {
+    if (!Number.isInteger(index) || index < 0 || index >= blocks.length) return;
+    const block = blocks[index];
+    block.is_counting = true;
+    renderBlocksList();
+    if (selectedBlockIndex === index) {
+      setEditorBlockCountLoading(true);
+    }
+
+    try {
+      clearDbErrorBanner();
+      const response = await fetch('/api/generate-builder-sql', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ blocks: [blockToApi(block)] }),
+      });
+      const sqlResp = await response.json();
+      if (sqlResp.error) {
+        showDbErrorBanner(sqlResp.error);
+        return;
+      }
+
+      const countResp = await runCountForSql(sqlResp.sql);
+      if (countResp.error) {
+        showDbErrorBanner(countResp.error);
+        return;
+      }
+
+      block.last_count = countResp.count;
+      if (selectedBlockIndex === index) {
+        const countChip = document.getElementById('current-block-count');
+        if (countChip) {
+          countChip.textContent = `Query Count: ${countResp.count}`;
+        }
+      }
+    } catch (error) {
+      showDbErrorBanner(error);
+    } finally {
+      block.is_counting = false;
+      renderBlocksList();
+      if (selectedBlockIndex === index) {
+        setEditorBlockCountLoading(false);
+      }
+    }
+  }
+
+  async function recalcAllBlockCounts() {
+    for (let index = 0; index < blocks.length; index += 1) {
+      // Sequential updates avoid overloading the DB with many concurrent count queries.
+      await recalcBlockCount(index);
+    }
+  }
+
   function wireBlockCountPreview() {
     const btnBlockTest = document.getElementById('btn-test-block-query');
     if (!btnBlockTest) return;
 
     btnBlockTest.addEventListener('click', async () => {
       if (selectedBlockIndex < 0 || selectedBlockIndex >= blocks.length) return;
-      const selectedBlock = blocks[selectedBlockIndex];
-      try {
-        clearDbErrorBanner();
-        const response = await fetch('/api/generate-builder-sql', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ blocks: [blockToApi(selectedBlock)] }),
-        });
-        const sqlResp = await response.json();
-        if (sqlResp.error) {
-          showDbErrorBanner(sqlResp.error);
-          return;
-        }
-
-        const countResp = await runCountForSql(sqlResp.sql);
-        if (countResp.error) {
-          showDbErrorBanner(countResp.error);
-          return;
-        }
-
-        selectedBlock.last_count = countResp.count;
-        const countChip = document.getElementById('current-block-count');
-        if (countChip) {
-          countChip.textContent = `Query Count: ${countResp.count}`;
-        }
-        renderBlocksList();
-      } catch (error) {
-        showDbErrorBanner(error);
-      }
+      await recalcBlockCount(selectedBlockIndex);
     });
   }
 
@@ -1338,7 +1415,7 @@
   });
 
   document.getElementById('btn-add-block').addEventListener('click', () => {
-    const type = document.getElementById('add-block-select').value || 'hierarchy_by_person';
+    const type = document.getElementById('add-block-select').value || 'hierarchy_by_role';
     blocks.push(createBlock(type));
     selectedBlockIndex = blocks.length - 1;
     markDirty();
@@ -1359,7 +1436,16 @@
       removeBlock(index);
     } else if (action === 'duplicate') {
       duplicateBlock(index);
+    } else if (action === 'count') {
+      recalcBlockCount(index);
     }
+  });
+
+  document.getElementById('btn-refresh-all-block-counts').addEventListener('click', async () => {
+    if (blocks.length === 0) {
+      return;
+    }
+    await recalcAllBlockCounts();
   });
 
   document.querySelectorAll('a[href]').forEach((link) => {

@@ -221,6 +221,21 @@
     </div>
     <div class="card-body">
       <p class="text-muted small">Selected columns will be appended after the original CSV columns.</p>
+      <div class="mb-3">
+        <label class="form-label mb-1">Rows to Download</label>
+        <div class="form-check">
+          <input class="form-check-input" type="radio" name="download-scope" id="download-scope-all" value="all" checked>
+          <label class="form-check-label" for="download-scope-all">Download all rows</label>
+        </div>
+        <div class="form-check">
+          <input class="form-check-input" type="radio" name="download-scope" id="download-scope-matched" value="matched">
+          <label class="form-check-label" for="download-scope-matched">Download matched rows only</label>
+        </div>
+        <div class="form-check">
+          <input class="form-check-input" type="radio" name="download-scope" id="download-scope-review" value="needs_review">
+          <label class="form-check-label" for="download-scope-review">Download rows in need of review</label>
+        </div>
+      </div>
       <div class="row g-2">
         {% for field, label in exportable_fields.items() %}
         <div class="col-md-6">
@@ -242,6 +257,7 @@
 <form id="download-form" method="post" action="{{ url_for('main.adhoc_match_download') }}" hidden>
   <input type="hidden" name="state_token" id="state_token" value="{{ state_token or '' }}">
   <input type="hidden" name="selection_overrides_json" id="selection_overrides_json">
+  <input type="hidden" name="download_scope" id="download_scope" value="all">
   <input type="hidden" name="selected_fields_csv" id="selected_fields_csv">
 </form>
 
@@ -420,6 +436,8 @@
 
   document.getElementById('submit-download').addEventListener('click', () => {
     const fields = Array.from(document.querySelectorAll('.export-field:checked')).map(input => input.value);
+    const scopeInput = document.querySelector('input[name="download-scope"]:checked');
+    const scopeValue = scopeInput ? scopeInput.value : 'all';
     const overrides = {};
     (matchState.rows || []).forEach((row) => {
       const key = String(row.row_index);
@@ -430,6 +448,7 @@
       }
     });
     document.getElementById('selection_overrides_json').value = JSON.stringify(overrides);
+    document.getElementById('download_scope').value = scopeValue;
     document.getElementById('selected_fields_csv').value = fields.join(',');
     document.getElementById('download-form').submit();
   });

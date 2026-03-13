@@ -380,6 +380,7 @@ def test_adhoc_match_download_uses_compact_state_token_payload(client, app_works
         "/adhoc-match/download",
         data={
             "state_token": "token-1",
+            "download_scope": "all",
             "selection_overrides_json": json.dumps({}),
             "selected_fields_csv": "username,email,job_title",
         },
@@ -388,8 +389,8 @@ def test_adhoc_match_download_uses_compact_state_token_payload(client, app_works
     assert rv.status_code == 200
     csv_text = rv.data.decode("utf-8-sig")
     rows = list(csv.reader(io.StringIO(csv_text)))
-    assert rows[0] == ["name", "Username", "Email", "Job Title"]
-    assert rows[1] == ["Alice Example", "alice", "alice@fastenal.com", "Tester"]
+    assert rows[0] == ["Original Row #", "name", "Username", "Email", "Job Title"]
+    assert rows[1] == ["1", "Alice Example", "alice", "alice@fastenal.com", "Tester"]
 
 
 def test_adhoc_match_download_exports_match_method_labels(client, app_workspace):
@@ -435,6 +436,7 @@ def test_adhoc_match_download_exports_match_method_labels(client, app_workspace)
         "/adhoc-match/download",
         data={
             "state_token": "token-2",
+            "download_scope": "all",
             "selection_overrides_json": json.dumps({"2": 1, "3": 0}),
             "selected_fields_csv": "match_method,username",
         },
@@ -443,11 +445,107 @@ def test_adhoc_match_download_exports_match_method_labels(client, app_workspace)
     assert rv.status_code == 200
     csv_text = rv.data.decode("utf-8-sig")
     rows = list(csv.reader(io.StringIO(csv_text)))
-    assert rows[0] == ["name", "Match Method", "Username"]
-    assert rows[1] == ["Alice Example", "Exact Match", "alice"]
-    assert rows[2] == ["Bob Example", "Fuzzy Auto Match", "bob"]
-    assert rows[3] == ["Cara Example", "Fuzzy Manual Match", "cara-b"]
-    assert rows[4] == ["Dana Example", "Exact Manual Match", "dana-a"]
+    assert rows[0] == ["Original Row #", "name", "Match Method", "Username"]
+    assert rows[1] == ["1", "Alice Example", "Exact Match", "alice"]
+    assert rows[2] == ["2", "Bob Example", "Fuzzy Auto Match", "bob"]
+    assert rows[3] == ["3", "Cara Example", "Fuzzy Manual Match", "cara-b"]
+    assert rows[4] == ["4", "Dana Example", "Exact Manual Match", "dana-a"]
+
+
+def test_adhoc_match_download_scope_matched_only(client, app_workspace):
+    app, _ = app_workspace
+    app.config["adhoc_match_state_store"] = {
+        "token-3": {
+            "created_at": 1,
+            "headers": ["name"],
+            "rows": [
+                {
+                    "row_index": 0,
+                    "original": {"name": "Alice"},
+                    "matches": [{"username": "alice"}],
+                    "selected_index": 0,
+                    "match_source": "exact",
+                },
+                {
+                    "row_index": 1,
+                    "original": {"name": "Bob"},
+                    "matches": [{"username": "bob-a"}, {"username": "bob-b"}],
+                    "selected_index": None,
+                    "match_source": "fuzzy",
+                },
+            ],
+        }
+    }
+
+    rv = client.post(
+        "/adhoc-match/download",
+        data={
+            "state_token": "token-3",
+            "download_scope": "matched",
+            "selection_overrides_json": json.dumps({}),
+            "selected_fields_csv": "username",
+        },
+    )
+
+    assert rv.status_code == 200
+    csv_text = rv.data.decode("utf-8-sig")
+    rows = list(csv.reader(io.StringIO(csv_text)))
+    assert rows[0] == ["Original Row #", "name", "Username"]
+    assert rows[1] == ["1", "Alice", "alice"]
+    assert len(rows) == 2
+
+
+def test_adhoc_match_download_scope_needs_review_expands_candidates(client, app_workspace):
+    app, _ = app_workspace
+    app.config["adhoc_match_state_store"] = {
+        "token-4": {
+            "created_at": 1,
+            "headers": ["name"],
+            "rows": [
+                {
+                    "row_index": 0,
+                    "original": {"name": "Alice"},
+                    "matches": [{"username": "alice"}],
+                    "selected_index": 0,
+                    "match_source": "exact",
+                },
+                {
+                    "row_index": 1,
+                    "original": {"name": "Bob"},
+                    "matches": [{"username": "bob-a"}, {"username": "bob-b"}],
+                    "selected_index": None,
+                    "match_source": "fuzzy",
+                },
+                {
+                    "row_index": 2,
+                    "original": {"name": "Cara"},
+                    "matches": [],
+                    "selected_index": None,
+                    "match_source": "none",
+                },
+            ],
+        }
+    }
+
+    rv = client.post(
+        "/adhoc-match/download",
+        data={
+            "state_token": "token-4",
+            "download_scope": "needs_review",
+            "selection_overrides_json": json.dumps({}),
+            "selected_fields_csv": "match_method,username",
+        },
+    )
+
+    assert rv.status_code == 200
+    csv_text = rv.data.decode("utf-8-sig")
+    rows = list(csv.reader(io.StringIO(csv_text)))
+    assert rows[0] == ["Original Row #", "name", "Match Method", "Username"]
+    # Bob has two review candidates, both with original row number 2.
+    assert rows[1] == ["2", "Bob", "Review Candidate", "bob-a"]
+    assert rows[2] == ["2", "Bob", "Review Candidate", "bob-b"]
+    # Cara is still in needs-review scope with no candidates.
+    assert rows[3] == ["3", "Cara", "No Match Selected", ""]
 
 
 def test_updates_page(client):
@@ -579,6 +677,7 @@ def test_query_builder_routes(client, monkeypatch):
     assert b"attr-company-tags" in response.data
     assert b"attr-tree-branch-tags" in response.data
     assert b"attr-department-id-tags" in response.data
+    assert b"Refresh All Block Counts" in response.data
 
     response = client.get("/tag/new")
     assert response.status_code == 200
