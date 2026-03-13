@@ -13,6 +13,14 @@ $script:DotFrames = @('.', '..', '...')
 $script:RuntimeInfoPath = Join-Path $RootDir '.runtime\ui.json'
 $script:RuntimeLogPath = Join-Path $RootDir '.runtime\server.err.log'
 $script:BannerTopRow = -1
+$global:CurrentServerPid = $null
+
+# Ensure the child server process never outlives this launcher window.
+Register-EngineEvent -SourceIdentifier PowerShell.Exiting -Action {
+    if ($global:CurrentServerPid) {
+        Stop-Process -Id $global:CurrentServerPid -Force -ErrorAction SilentlyContinue
+    }
+} | Out-Null
 
 function Ensure-RuntimeDirectory {
     $runtimeDir = Split-Path -Parent $script:RuntimeInfoPath
@@ -159,6 +167,7 @@ $env:VIVA_ENGAGE_TOOLS_SKIP_BROWSER = ''
 
 while ($true) {
     $server = Start-ServerProcess
+    $global:CurrentServerPid = $server.Id
     $script:StatusBase = 'Server running'
     $script:StatusColor = 'Green'
     $frameIndex = 0
@@ -206,6 +215,7 @@ while ($true) {
 
     $script:StatusBase = 'Server stopped'
     $script:StatusColor = 'Yellow'
+    $global:CurrentServerPid = $null
     Show-Banner -Dots '.'
     break
 }
