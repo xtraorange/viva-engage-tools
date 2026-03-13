@@ -589,6 +589,91 @@
   <div class="container mt-4 app-shell">
     {% block content %}{% endblock %}
   </div>
+
+  <div id="app-restart-overlay" class="position-fixed top-0 start-0 w-100 h-100 d-none align-items-center justify-content-center" style="background-color: rgba(0, 0, 0, 0.45); z-index: 10000;">
+    <div class="card text-center p-4" style="min-width: 360px;">
+      <div class="mb-3">
+        <div class="spinner-border text-primary" role="status">
+          <span class="visually-hidden">Restarting...</span>
+        </div>
+      </div>
+      <h5 class="mb-1">Restarting Application</h5>
+      <p id="app-restart-overlay-message" class="text-muted mb-0">Waiting for the server to come back online...</p>
+    </div>
+  </div>
+
+  <script>
+    window.__skipUnsavedGuard = false;
+
+    window.setRestartOverlayVisible = function (visible, message) {
+      const overlay = document.getElementById('app-restart-overlay');
+      const text = document.getElementById('app-restart-overlay-message');
+      if (!overlay) return;
+      if (text && message) {
+        text.textContent = message;
+      }
+      if (visible) {
+        overlay.classList.remove('d-none');
+        overlay.classList.add('d-flex');
+      } else {
+        overlay.classList.add('d-none');
+        overlay.classList.remove('d-flex');
+      }
+    };
+
+    window.restartInPlace = async function (options) {
+      const opts = options || {};
+      const restartUrl = opts.restartUrl || '/restart';
+      const checkUrl = opts.checkUrl || '/';
+      const overlayMessage = opts.overlayMessage || 'Restarting application... waiting for server to come back online.';
+      const timeoutMs = Number.isFinite(opts.timeoutMs) ? opts.timeoutMs : 60000;
+      const pollMs = Number.isFinite(opts.pollMs) ? opts.pollMs : 1000;
+      const shutdownDelayMs = Number.isFinite(opts.shutdownDelayMs) ? opts.shutdownDelayMs : 1200;
+      const triggerButton = opts.triggerButton || null;
+
+      if (triggerButton) {
+        triggerButton.disabled = true;
+      }
+
+      window.__skipUnsavedGuard = true;
+      window.setRestartOverlayVisible(true, overlayMessage);
+
+      // Give the browser a chance to paint the overlay before shutdown begins.
+      await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+
+      try {
+        await fetch(restartUrl, { method: 'POST' });
+      } catch (_) {
+        // Expected during shutdown.
+      }
+
+      const started = Date.now();
+      setTimeout(() => {
+        const checkInterval = setInterval(async () => {
+          try {
+            const response = await fetch(checkUrl, { cache: 'no-store' });
+            if (response.ok) {
+              clearInterval(checkInterval);
+              window.location.href = checkUrl;
+              return;
+            }
+          } catch (_) {
+            // Server still restarting.
+          }
+
+          if (Date.now() - started > timeoutMs) {
+            clearInterval(checkInterval);
+            window.setRestartOverlayVisible(false);
+            window.__skipUnsavedGuard = false;
+            if (triggerButton) {
+              triggerButton.disabled = false;
+            }
+            alert('Server did not respond within 60 seconds. Please refresh manually.');
+          }
+        }, pollMs);
+      }, shutdownDelayMs);
+    };
+  </script>
   
   {% if updating %}
   <div class="position-fixed top-0 start-0 w-100 h-100 d-flex align-items-center justify-content-center" style="background-color: rgba(0, 0, 0, 0.5); z-index: 9999;">
@@ -644,23 +729,13 @@
     }, 500);
 
     document.getElementById('restart-btn').addEventListener('click', async () => {
-      await fetch('{{ url_for("updates.restart") }}', { method: 'POST' });
-      document.getElementById('restart-btn').disabled = true;
-      document.querySelector('.card-text').textContent = 'Shutting down...';
-      // after server stops, poll until it comes back then reload
-      const checkUrl = '{{ url_for("main.index") }}';
-      let down = false;
-      const checkInterval = setInterval(async () => {
-        try {
-          const r = await fetch(checkUrl);
-          if (down && r.ok) {
-            clearInterval(checkInterval);
-            window.location = checkUrl;
-          }
-        } catch (e) {
-          down = true; // server is down or unreachable
-        }
-      }, 1000);
+      document.querySelector('.card-text').textContent = 'Restarting...';
+      await window.restartInPlace({
+        triggerButton: document.getElementById('restart-btn'),
+        restartUrl: '{{ url_for("updates.restart") }}',
+        checkUrl: '{{ url_for("main.index") }}',
+        overlayMessage: 'Restarting application after update... waiting for server to come back online.',
+      });
     });
   </script>
   {% endif %}
@@ -727,6 +802,9 @@
       });
 
       window.addEventListener('beforeunload', (event) => {
+        if (window.__skipUnsavedGuard) {
+          return;
+        }
         const hasDirtyForm = guardedForms.some((form) => form.dataset.isDirty === 'true');
         if (!hasDirtyForm) {
           return;

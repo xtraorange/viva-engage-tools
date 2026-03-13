@@ -181,35 +181,14 @@
     const btn = this;
     btn.disabled = true;
     btn.textContent = 'Restarting...';
-    try {
-      await fetch('{{ url_for("updates.restart") }}', { method: 'POST' });
-    } catch (_) {
-      // Expected: server killed the connection on os._exit(0) — restart was sent
-    }
-    // After the fetch (success or network error), server is restarting.
-    btn.textContent = 'Waiting for server...';
-    const checkUrl = '{{ url_for("main.index") }}';
-    // Wait 2s for server to fully shut down before polling
-    setTimeout(() => {
-      const checkInterval = setInterval(async () => {
-        try {
-          const r = await fetch(checkUrl, { cache: 'no-store' });
-          if (r.ok) {
-            clearInterval(checkInterval);
-            window.location.href = checkUrl;
-          }
-        } catch (_) {
-          // server still restarting
-        }
-      }, 1500);
-      // Give up after 60 seconds and restore button
-      setTimeout(() => {
-        clearInterval(checkInterval);
-        btn.disabled = false;
-        btn.textContent = 'Restart App';
-        alert('Server did not respond within 60 seconds. Please refresh manually.');
-      }, 60000);
-    }, 2000);
+    await window.restartInPlace({
+      triggerButton: btn,
+      restartUrl: '{{ url_for("updates.restart") }}',
+      checkUrl: '{{ url_for("main.index") }}',
+      overlayMessage: 'Restarting application... waiting for server to come back online.',
+      pollMs: 1500,
+      shutdownDelayMs: 1200,
+    });
   });
 </script>
 {% endblock %}

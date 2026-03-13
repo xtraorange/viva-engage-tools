@@ -608,6 +608,7 @@ def test_restart_endpoint(client):
 
     flag_path = Path.cwd() / "restart.flag"
     assert flag_path.exists()
+    assert flag_path.read_text(encoding="utf-8").strip() in {"restart", "restart:no-browser"}
     flag_path.unlink()
 
 

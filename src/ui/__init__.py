@@ -77,13 +77,20 @@ def run_app():
             f"Configured port {preferred_port} is in use; starting on available port {port} instead."
         )
 
-    # Open browser after a brief delay to let the server start
-    def open_browser():
-        time.sleep(1.5)
-        webbrowser.open(app_url)
+    skip_browser = str(os.environ.get("JAMPY_SKIP_BROWSER", "")).strip().lower() in {"1", "true", "yes"}
 
-    browser_thread = threading.Thread(target=open_browser, daemon=True)
-    browser_thread.start()
+    # Open browser after a brief delay to let the server start.
+    # For UI-triggered restarts we skip this so the existing tab can reconnect.
+    if not skip_browser:
+        def open_browser():
+            time.sleep(1.5)
+            webbrowser.open(app_url)
+
+        browser_thread = threading.Thread(target=open_browser, daemon=True)
+        browser_thread.start()
+
+    # Reset one-shot skip flag for any future non-restart launches in this shell.
+    os.environ["JAMPY_SKIP_BROWSER"] = ""
 
     # Suppress Werkzeug banner by redirecting stdout during startup
     old_stdout = sys.stdout

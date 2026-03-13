@@ -1,18 +1,29 @@
 # Jampy Engage Application Launcher
 # This script activates the virtual environment and starts the web application
 
-Write-Host ""
-Write-Host "============================================" -ForegroundColor Green
-Write-Host "   Jampy Engage Application" -ForegroundColor Green
-Write-Host "============================================" -ForegroundColor Green
-Write-Host ""
+function Show-BannerAndStatus {
+    param(
+        [string]$Status,
+        [string]$StatusColor = "Green"
+    )
+
+    Clear-Host
+    Write-Host "============================================" -ForegroundColor Cyan
+    Write-Host "   Viva Engage Tools Server" -ForegroundColor Cyan
+    Write-Host "============================================" -ForegroundColor Cyan
+    Write-Host "   Workspace: $scriptDir" -ForegroundColor DarkGray
+    Write-Host "   UI restart behavior: reconnect current tab" -ForegroundColor DarkGray
+    Write-Host ""
+    Write-Host "Status: $Status" -ForegroundColor $StatusColor
+    Write-Host ""
+}
 
 # Change to the script directory (in case it's run from elsewhere)
 $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 Set-Location $scriptDir
 
 # Activate the virtual environment
-Write-Host "Activating virtual environment..."
+Show-BannerAndStatus -Status "Activating virtual environment..." -StatusColor "Yellow"
 $venvPath = Join-Path $scriptDir ".venv\Scripts\Activate.ps1"
 if (Test-Path $venvPath) {
     & $venvPath
@@ -33,23 +44,39 @@ if (Test-Path $venvPath) {
     exit 1
 }
 
-Write-Host "Virtual environment activated successfully." -ForegroundColor Green
-Write-Host ""
-Write-Host "Starting Flask application..." -ForegroundColor Green
-Write-Host ""
-Write-Host "============================================" -ForegroundColor Cyan
-Write-Host "   Jampy Engage is starting..." -ForegroundColor Cyan
-Write-Host "   Opening the configured app URL in your browser" -ForegroundColor Cyan
-Write-Host "============================================" -ForegroundColor Cyan
-Write-Host ""
-Write-Host "Press Ctrl+C to stop the server." -ForegroundColor Yellow
-Write-Host ""
+# Start the Flask application inside a restart loop
+$env:JAMPY_SKIP_BROWSER = ""
+while ($true) {
+    Show-BannerAndStatus -Status "Server Running..." -StatusColor "Green"
+    python -m src.ui
 
-# Start the Flask application (this will also open the browser automatically)
-python -m src.ui
+    if (Test-Path "restart.flag") {
+        $restartMode = "restart"
+        try {
+            $restartMode = (Get-Content "restart.flag" -Raw).Trim()
+        } catch {
+            $restartMode = "restart"
+        }
+        Remove-Item "restart.flag" -Force -ErrorAction SilentlyContinue
+
+        if ($restartMode -eq "restart:no-browser") {
+            $env:JAMPY_SKIP_BROWSER = "1"
+        } else {
+            $env:JAMPY_SKIP_BROWSER = ""
+        }
+
+        if ($env:JAMPY_SKIP_BROWSER -eq "1") {
+            Show-BannerAndStatus -Status "Restarting... (keeping browser in current tab)" -StatusColor "Yellow"
+        } else {
+            Show-BannerAndStatus -Status "Restarting... (launcher will open browser)" -StatusColor "Yellow"
+        }
+        Start-Sleep -Milliseconds 900
+        continue
+    }
+
+    break
+}
 
 # Show that the app has closed
-Write-Host ""
-Write-Host "Application has stopped." -ForegroundColor Yellow
-Write-Host ""
+Show-BannerAndStatus -Status "Server stopped" -StatusColor "Yellow"
 Read-Host "Press Enter to exit"

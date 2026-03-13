@@ -244,9 +244,12 @@ def init_updates_routes(app, base_path: str):
     @updates_bp.route("/restart", methods=["POST"])
     def restart():
         """Signal the launcher to restart the server and shut down gracefully."""
+        open_browser = request.values.get("open_browser", "0") == "1"
+        restart_mode = "restart" if open_browser else "restart:no-browser"
+
         # write restart flag for start scripts
         with open("restart.flag", "w") as f:
-            f.write("restart")
+            f.write(restart_mode)
 
         # attempt to shutdown the Flask development server if available
         func = request.environ.get('werkzeug.server.shutdown')

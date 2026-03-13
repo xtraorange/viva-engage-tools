@@ -69,13 +69,14 @@
 
     function addTag(rawTag) {
       var tag = String(rawTag || '').trim();
-      if (!tag) return;
+      if (!tag) return false;
       var exists = state.tags.some(function (existing) {
         return existing.toLowerCase() === tag.toLowerCase();
       });
-      if (exists) return;
+      if (exists) return false;
       state.tags.push(tag);
       renderChips();
+      return true;
     }
 
     function removeTag(index) {
@@ -120,8 +121,8 @@
             event.preventDefault();
             addTag(item.getAttribute('data-tag'));
             input.value = '';
-            hideSuggestions();
             input.focus();
+            renderSuggestions('');
           });
         });
       }
@@ -132,8 +133,8 @@
     function submitInputTag() {
       addTag(input.value);
       input.value = '';
-      hideSuggestions();
       input.focus();
+      renderSuggestions('');
     }
 
     if (addButton) {
@@ -155,7 +156,12 @@
     });
 
     input.addEventListener('blur', function () {
-      setTimeout(hideSuggestions, 150);
+      setTimeout(function () {
+        if (document.activeElement === input) {
+          return;
+        }
+        hideSuggestions();
+      }, 150);
     });
 
     chipContainer.addEventListener('click', function (event) {
