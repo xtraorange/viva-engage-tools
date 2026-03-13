@@ -6,6 +6,7 @@ import json
 import os
 import threading
 import time
+import uuid
 
 from ...services.config_service import ConfigService
 from ...services.employee_lookup_service import EmployeeLookupService, EXPORTABLE_FIELDS
@@ -100,13 +101,73 @@ def init_main_routes(app, base_path: str):
             rows.append({header: padded[index] for index, header in enumerate(headers)})
         return headers, rows
 
+    def _match_cache_key(name_parts):
+        return (
+            (name_parts.get("display") or "").strip().lower(),
+            (name_parts.get("first_name") or "").strip().lower(),
+            (name_parts.get("last_name") or "").strip().lower(),
+        )
+
+    def _get_adhoc_state_store():
+        return app.config.setdefault("adhoc_match_state_store", {})
+
+    def _prune_adhoc_state_store(max_entries: int = 20, max_age_seconds: int = 7200):
+        store = _get_adhoc_state_store()
+        now = time.time()
+        stale_tokens = [
+            token for token, payload in store.items()
+            if (now - float(payload.get("created_at", 0))) > max_age_seconds
+        ]
+        for token in stale_tokens:
+            store.pop(token, None)
+
+        if len(store) > max_entries:
+            ordered = sorted(store.items(), key=lambda item: float(item[1].get("created_at", 0)))
+            overflow = len(store) - max_entries
+            for token, _ in ordered[:overflow]:
+                store.pop(token, None)
+
+    def _save_adhoc_state(headers, rows):
+        _prune_adhoc_state_store()
+        token = uuid.uuid4().hex
+        store = _get_adhoc_state_store()
+        store[token] = {
+            "created_at": time.time(),
+            "headers": headers,
+            "rows": rows,
+        }
+        _prune_adhoc_state_store()
+        return token
+
+    def _describe_match_method(row, selected_index, has_selected_match):
+        if not has_selected_match:
+            return "No Match Selected"
+
+        initial_selected_index = row.get("selected_index") if isinstance(row.get("selected_index"), int) else None
+        is_manual_selection = selected_index != initial_selected_index
+        match_source = row.get("match_source") or ""
+
+        if match_source == "exact":
+            return "Exact Manual Match" if is_manual_selection else "Exact Match"
+        if match_source == "fuzzy":
+            return "Fuzzy Manual Match" if is_manual_selection else "Fuzzy Auto Match"
+        return "Manual Match" if is_manual_selection else "Matched"
+
     @main_bp.route("/adhoc-match", methods=["GET", "POST"])
     def adhoc_match():
         """Upload a CSV of names, review matches, and export enriched data."""
         if request.method == "POST":
             upload = request.files.get("csv_file")
+            search_mode = request.form.get("search_mode", "exact_then_fuzzy").strip().lower()
+            if search_mode not in {"fuzzy_only", "exact_then_fuzzy", "exact_only"}:
+                search_mode = "exact_then_fuzzy"
             if not upload or not upload.filename:
-                return render_template("adhoc_match.html", error="Choose a CSV file to upload.", exportable_fields=EXPORTABLE_FIELDS)
+                return render_template(
+                    "adhoc_match.html",
+                    error="Choose a CSV file to upload.",
+                    exportable_fields=EXPORTABLE_FIELDS,
+                    search_mode=search_mode,
+                )
 
             cfg = config_service.load_general_config()
             lookup_service = EmployeeLookupService(cfg.get("oracle_tns"))
@@ -114,31 +175,103 @@ def init_main_routes(app, base_path: str):
             try:
                 headers, uploaded_rows = _parse_match_upload(upload)
             except Exception as exc:
-                return render_template("adhoc_match.html", error=f"Unable to read CSV: {exc}", exportable_fields=EXPORTABLE_FIELDS)
+                return render_template(
+                    "adhoc_match.html",
+                    error=f"Unable to read CSV: {exc}",
+                    exportable_fields=EXPORTABLE_FIELDS,
+                    search_mode=search_mode,
+                    lookup_stats=None,
+                )
 
-            results = []
-            match_cache = {}
+            lookup_started = time.perf_counter()
+            prepared_rows = []
+            unique_requests = {}
             for row_index, row_dict in enumerate(uploaded_rows):
                 name_parts = _build_match_input(headers, row_dict)
-                cache_key = (
-                    (name_parts.get("display") or "").strip().lower(),
+                cache_key = _match_cache_key(name_parts)
+                prepared_rows.append((row_index, row_dict, name_parts, cache_key))
+                if cache_key[0] and cache_key not in unique_requests:
+                    unique_requests[cache_key] = name_parts
+
+            exact_pair_keys = {
+                (
                     (name_parts.get("first_name") or "").strip().lower(),
                     (name_parts.get("last_name") or "").strip().lower(),
                 )
+                for name_parts in unique_requests.values()
+                if (name_parts.get("first_name") or "").strip() and (name_parts.get("last_name") or "").strip()
+            }
 
-                if not cache_key[0]:
-                    matches = []
-                elif cache_key in match_cache:
-                    matches = match_cache[cache_key]
-                else:
-                    matches = lookup_service.search_candidates(
+            exact_batch_queries = 0
+            if search_mode in {"exact_then_fuzzy", "exact_only"}:
+                exact_batch_queries = max(1, (len(exact_pair_keys) + 199) // 200) if exact_pair_keys else 0
+
+            exact_resolved_keys = set()
+            fuzzy_fallback_attempted = 0
+            fuzzy_fallback_resolved = 0
+            match_cache = {cache_key: [] for cache_key in unique_requests}
+            match_sources = {cache_key: "none" for cache_key in unique_requests}
+            try:
+                if search_mode in {"exact_then_fuzzy", "exact_only"} and unique_requests and hasattr(lookup_service, "search_candidates_batch"):
+                    match_cache.update(
+                        lookup_service.search_candidates_batch(
+                            [
+                                {
+                                    "query": name_parts.get("display"),
+                                    "first_name": name_parts.get("first_name"),
+                                    "last_name": name_parts.get("last_name"),
+                                }
+                                for name_parts in unique_requests.values()
+                            ],
+                            limit=10,
+                        )
+                    )
+                    for cache_key in unique_requests:
+                        if match_cache.get(cache_key):
+                            exact_resolved_keys.add(cache_key)
+                            match_sources[cache_key] = "exact"
+
+                if search_mode in {"exact_then_fuzzy", "exact_only"} and unique_requests and not hasattr(lookup_service, "search_candidates_batch") and hasattr(lookup_service, "search_candidates_exact"):
+                    for cache_key, name_parts in unique_requests.items():
+                        match_cache[cache_key] = lookup_service.search_candidates_exact(
+                            query=name_parts["display"],
+                            first_name=name_parts["first_name"],
+                            last_name=name_parts["last_name"],
+                            limit=10,
+                        )
+                        if match_cache[cache_key]:
+                            exact_resolved_keys.add(cache_key)
+                            match_sources[cache_key] = "exact"
+
+                for cache_key, name_parts in unique_requests.items():
+                    if search_mode == "exact_only":
+                        continue
+                    if search_mode == "exact_then_fuzzy" and match_cache.get(cache_key):
+                        continue
+                    fuzzy_fallback_attempted += 1
+                    match_cache[cache_key] = lookup_service.search_candidates(
                         query=name_parts["display"],
                         first_name=name_parts["first_name"],
                         last_name=name_parts["last_name"],
                         limit=10,
                     )
-                    match_cache[cache_key] = matches
+                    if match_cache[cache_key]:
+                        fuzzy_fallback_resolved += 1
+                        match_sources[cache_key] = "fuzzy"
+            except Exception as exc:
+                return render_template(
+                    "adhoc_match.html",
+                    error=f"Unable to search employee matches right now. Check the database/network connection and try again. Details: {exc}",
+                    exportable_fields=EXPORTABLE_FIELDS,
+                    headers=[],
+                    match_results=[],
+                    search_mode=search_mode,
+                    lookup_stats=None,
+                )
 
+            results = []
+            for row_index, row_dict, name_parts, cache_key in prepared_rows:
+                matches = match_cache.get(cache_key, []) if cache_key[0] else []
                 selected_index = 0 if len(matches) == 1 else None
                 results.append({
                     "row_index": row_index,
@@ -146,7 +279,23 @@ def init_main_routes(app, base_path: str):
                     "source_name": name_parts["display"],
                     "matches": matches,
                     "selected_index": selected_index,
+                    "match_source": match_sources.get(cache_key, "none") if cache_key[0] else "none",
                 })
+
+            exact_resolved = len(exact_resolved_keys)
+            lookup_elapsed_ms = int((time.perf_counter() - lookup_started) * 1000)
+            lookup_stats = {
+                "search_mode": search_mode,
+                "uploaded_rows": len(uploaded_rows),
+                "unique_names": len(unique_requests),
+                "exact_pairs": len(exact_pair_keys),
+                "exact_batch_queries": exact_batch_queries,
+                "exact_resolved": exact_resolved,
+                "fuzzy_fallback_attempted": fuzzy_fallback_attempted,
+                "fuzzy_fallback_resolved": fuzzy_fallback_resolved,
+                "elapsed_ms": lookup_elapsed_ms,
+            }
+            state_token = _save_adhoc_state(headers, results)
 
             return render_template(
                 "adhoc_match.html",
@@ -155,22 +304,42 @@ def init_main_routes(app, base_path: str):
                 exportable_fields=EXPORTABLE_FIELDS,
                 updating=app.config.get("updating"),
                 update_error=app.config.get("update_error"),
+                search_mode=search_mode,
+                lookup_stats=lookup_stats,
+                state_token=state_token,
             )
 
-        return render_template("adhoc_match.html", exportable_fields=EXPORTABLE_FIELDS, headers=[], match_results=[])
+        return render_template(
+            "adhoc_match.html",
+            exportable_fields=EXPORTABLE_FIELDS,
+            headers=[],
+            match_results=[],
+            search_mode="exact_then_fuzzy",
+            lookup_stats=None,
+            state_token="",
+        )
 
     @main_bp.route("/adhoc-match/download", methods=["POST"])
     def adhoc_match_download():
         """Export reviewed ad hoc match results as CSV."""
-        raw_state = request.form.get("match_state_json", "")
+        state_token = request.form.get("state_token", "").strip()
+        raw_overrides = request.form.get("selection_overrides_json", "")
         selected_fields = [field.strip() for field in request.form.get("selected_fields_csv", "").split(",") if field.strip() in EXPORTABLE_FIELDS]
-        if not raw_state:
+        if not state_token:
             return redirect(url_for("main.adhoc_match"))
 
-        try:
-            state = json.loads(raw_state)
-        except json.JSONDecodeError:
+        state = _get_adhoc_state_store().get(state_token)
+        if not state:
             return redirect(url_for("main.adhoc_match"))
+
+        overrides = {}
+        if raw_overrides:
+            try:
+                parsed = json.loads(raw_overrides)
+                if isinstance(parsed, dict):
+                    overrides = parsed
+            except json.JSONDecodeError:
+                overrides = {}
 
         headers = state.get("headers") or []
         rows = state.get("rows") or []
@@ -182,8 +351,24 @@ def init_main_routes(app, base_path: str):
             original = row.get("original") or {}
             matches = row.get("matches") or []
             selected_index = row.get("selected_index")
-            selected = matches[selected_index] if isinstance(selected_index, int) and 0 <= selected_index < len(matches) else {}
-            writer.writerow([original.get(header, "") for header in headers] + [selected.get(field, "") for field in selected_fields])
+            override_key = str(row.get("row_index"))
+            if override_key in overrides:
+                override_value = overrides.get(override_key)
+                if isinstance(override_value, int):
+                    selected_index = override_value
+                elif isinstance(override_value, str) and override_value.isdigit():
+                    selected_index = int(override_value)
+                else:
+                    selected_index = None
+            has_selected_match = isinstance(selected_index, int) and 0 <= selected_index < len(matches)
+            selected = matches[selected_index] if has_selected_match else {}
+            export_values = []
+            for field in selected_fields:
+                if field == "match_method":
+                    export_values.append(_describe_match_method(row, selected_index, has_selected_match))
+                else:
+                    export_values.append(selected.get(field, ""))
+            writer.writerow([original.get(header, "") for header in headers] + export_values)
 
         buffer = io.BytesIO(output.getvalue().encode("utf-8-sig"))
         buffer.seek(0)

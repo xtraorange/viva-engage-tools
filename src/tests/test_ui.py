@@ -2,6 +2,8 @@ import os
 import socket
 import time
 import io
+import csv
+import json
 from pathlib import Path
 
 import pytest
@@ -192,6 +194,17 @@ def test_adhoc_match_ignores_blank_rows(client, monkeypatch):
     assert b'"row_index": 1' in rv.data
     assert b'"row_index": 2' not in rv.data
     assert b"Rows Loaded" in rv.data
+    assert b"How Matched" in rv.data
+    assert b"Load New List" in rv.data
+    assert b"Lookup Stats" not in rv.data
+    assert b"Upload CSV" not in rv.data
+
+
+def test_adhoc_match_page_shows_search_mode_control(client):
+    rv = client.get("/adhoc-match")
+    assert rv.status_code == 200
+    assert b"Match Mode" in rv.data
+    assert b"Exact match, then fuzzy fallback" in rv.data
 
 
 def test_adhoc_match_caches_duplicate_name_lookups(client, monkeypatch):
@@ -218,6 +231,223 @@ def test_adhoc_match_caches_duplicate_name_lookups(client, monkeypatch):
 
     assert rv.status_code == 200
     assert call_count["count"] == 1
+
+
+def test_adhoc_match_prefers_batch_lookup_when_available(client, monkeypatch):
+    import src.ui.routes.main as main_routes
+
+    calls = {"batch": 0, "single": 0}
+
+    class DummyLookupService:
+        def __init__(self, oracle_tns):
+            self.oracle_tns = oracle_tns
+
+        def search_candidates_batch(self, inputs, limit=20, chunk_size=200):
+            calls["batch"] += 1
+            return {
+                ("alice example", "alice", "example"): [
+                    {"id": "1", "first_name": "Alice", "last_name": "Example", "username": "alice", "email": "alice@fastenal.com", "job_title": "Tester"}
+                ],
+                ("bob example", "bob", "example"): [
+                    {"id": "2", "first_name": "Bob", "last_name": "Example", "username": "bob", "email": "bob@fastenal.com", "job_title": "Tester"}
+                ],
+            }
+
+        def search_candidates(self, query=None, first_name=None, last_name=None, limit=20):
+            calls["single"] += 1
+            return []
+
+    monkeypatch.setattr(main_routes, "EmployeeLookupService", DummyLookupService)
+
+    csv_bytes = io.BytesIO(b"name\nAlice Example\nBob Example\n")
+    rv = client.post(
+        "/adhoc-match",
+        data={"csv_file": (csv_bytes, "names.csv")},
+        content_type="multipart/form-data",
+    )
+
+    assert rv.status_code == 200
+    assert calls["batch"] == 1
+    assert calls["single"] == 0
+    assert b"Rows Loaded" in rv.data
+
+
+def test_adhoc_match_handles_lookup_errors_gracefully(client, monkeypatch):
+    import src.ui.routes.main as main_routes
+
+    class DummyLookupService:
+        def __init__(self, oracle_tns):
+            self.oracle_tns = oracle_tns
+
+        def search_candidates_batch(self, inputs, limit=20, chunk_size=200):
+            raise RuntimeError("database unavailable")
+
+    monkeypatch.setattr(main_routes, "EmployeeLookupService", DummyLookupService)
+
+    csv_bytes = io.BytesIO(b"name\nAlice Example\n")
+    rv = client.post(
+        "/adhoc-match",
+        data={"csv_file": (csv_bytes, "names.csv")},
+        content_type="multipart/form-data",
+    )
+
+    assert rv.status_code == 200
+    assert b"Unable to search employee matches right now" in rv.data
+    assert b"database unavailable" in rv.data
+
+
+def test_adhoc_match_exact_only_skips_fuzzy_lookup(client, monkeypatch):
+    import src.ui.routes.main as main_routes
+
+    calls = {"batch": 0, "single": 0}
+
+    class DummyLookupService:
+        def __init__(self, oracle_tns):
+            self.oracle_tns = oracle_tns
+
+        def search_candidates_batch(self, inputs, limit=20, chunk_size=200):
+            calls["batch"] += 1
+            return {}
+
+        def search_candidates(self, query=None, first_name=None, last_name=None, limit=20):
+            calls["single"] += 1
+            return []
+
+    monkeypatch.setattr(main_routes, "EmployeeLookupService", DummyLookupService)
+
+    csv_bytes = io.BytesIO(b"name\nAlice Example\n")
+    rv = client.post(
+        "/adhoc-match",
+        data={"csv_file": (csv_bytes, "names.csv"), "search_mode": "exact_only"},
+        content_type="multipart/form-data",
+    )
+
+    assert rv.status_code == 200
+    assert calls["batch"] == 1
+    assert calls["single"] == 0
+
+
+def test_adhoc_match_fuzzy_only_skips_batch_lookup(client, monkeypatch):
+    import src.ui.routes.main as main_routes
+
+    calls = {"batch": 0, "single": 0}
+
+    class DummyLookupService:
+        def __init__(self, oracle_tns):
+            self.oracle_tns = oracle_tns
+
+        def search_candidates_batch(self, inputs, limit=20, chunk_size=200):
+            calls["batch"] += 1
+            return {}
+
+        def search_candidates(self, query=None, first_name=None, last_name=None, limit=20):
+            calls["single"] += 1
+            return []
+
+    monkeypatch.setattr(main_routes, "EmployeeLookupService", DummyLookupService)
+
+    csv_bytes = io.BytesIO(b"name\nAlice Example\n")
+    rv = client.post(
+        "/adhoc-match",
+        data={"csv_file": (csv_bytes, "names.csv"), "search_mode": "fuzzy_only"},
+        content_type="multipart/form-data",
+    )
+
+    assert rv.status_code == 200
+    assert calls["batch"] == 0
+    assert calls["single"] == 1
+
+
+def test_adhoc_match_download_uses_compact_state_token_payload(client, app_workspace):
+    app, _ = app_workspace
+    app.config["adhoc_match_state_store"] = {
+        "token-1": {
+            "created_at": 1,
+            "headers": ["name"],
+            "rows": [
+                {
+                    "row_index": 0,
+                    "original": {"name": "Alice Example"},
+                    "matches": [{"username": "alice", "email": "alice@fastenal.com", "job_title": "Tester"}],
+                    "selected_index": 0,
+                    "match_source": "exact",
+                }
+            ],
+        }
+    }
+
+    rv = client.post(
+        "/adhoc-match/download",
+        data={
+            "state_token": "token-1",
+            "selection_overrides_json": json.dumps({}),
+            "selected_fields_csv": "username,email,job_title",
+        },
+    )
+
+    assert rv.status_code == 200
+    csv_text = rv.data.decode("utf-8-sig")
+    rows = list(csv.reader(io.StringIO(csv_text)))
+    assert rows[0] == ["name", "Username", "Email", "Job Title"]
+    assert rows[1] == ["Alice Example", "alice", "alice@fastenal.com", "Tester"]
+
+
+def test_adhoc_match_download_exports_match_method_labels(client, app_workspace):
+    app, _ = app_workspace
+    app.config["adhoc_match_state_store"] = {
+        "token-2": {
+            "created_at": 1,
+            "headers": ["name"],
+            "rows": [
+                {
+                    "row_index": 0,
+                    "original": {"name": "Alice Example"},
+                    "matches": [{"username": "alice"}],
+                    "selected_index": 0,
+                    "match_source": "exact",
+                },
+                {
+                    "row_index": 1,
+                    "original": {"name": "Bob Example"},
+                    "matches": [{"username": "bob"}],
+                    "selected_index": 0,
+                    "match_source": "fuzzy",
+                },
+                {
+                    "row_index": 2,
+                    "original": {"name": "Cara Example"},
+                    "matches": [{"username": "cara-a"}, {"username": "cara-b"}],
+                    "selected_index": None,
+                    "match_source": "fuzzy",
+                },
+                {
+                    "row_index": 3,
+                    "original": {"name": "Dana Example"},
+                    "matches": [{"username": "dana-a"}, {"username": "dana-b"}],
+                    "selected_index": None,
+                    "match_source": "exact",
+                },
+            ],
+        }
+    }
+
+    rv = client.post(
+        "/adhoc-match/download",
+        data={
+            "state_token": "token-2",
+            "selection_overrides_json": json.dumps({"2": 1, "3": 0}),
+            "selected_fields_csv": "match_method,username",
+        },
+    )
+
+    assert rv.status_code == 200
+    csv_text = rv.data.decode("utf-8-sig")
+    rows = list(csv.reader(io.StringIO(csv_text)))
+    assert rows[0] == ["name", "Match Method", "Username"]
+    assert rows[1] == ["Alice Example", "Exact Match", "alice"]
+    assert rows[2] == ["Bob Example", "Fuzzy Auto Match", "bob"]
+    assert rows[3] == ["Cara Example", "Fuzzy Manual Match", "cara-b"]
+    assert rows[4] == ["Dana Example", "Exact Manual Match", "dana-a"]
 
 
 def test_updates_page(client):

@@ -8,12 +8,16 @@
     <h1 class="mb-1">Ad Hoc Name Matcher</h1>
     <small class="text-muted">Upload a CSV of names, review possible employee matches, and export enriched columns.</small>
   </div>
+  {% if match_results %}
+  <a href="{{ url_for('main.adhoc_match') }}" class="btn btn-outline-secondary">Load New List</a>
+  {% endif %}
 </div>
 
 {% if error %}
 <div class="alert alert-danger">{{ error }}</div>
 {% endif %}
 
+{% if not match_results %}
 <div class="card mb-4">
   <div class="card-header">
     <h5 class="mb-0">Upload CSV</h5>
@@ -24,10 +28,20 @@
         <label for="csv_file" class="form-label">CSV File</label>
         <input class="form-control" type="file" id="csv_file" name="csv_file" accept=".csv" required>
       </div>
+      <div style="min-width: 280px;">
+        <label for="search_mode" class="form-label">Match Mode</label>
+        <select class="form-select" id="search_mode" name="search_mode">
+          <option value="exact_then_fuzzy" {% if search_mode == 'exact_then_fuzzy' %}selected{% endif %}>Exact match, then fuzzy fallback</option>
+          <option value="fuzzy_only" {% if search_mode == 'fuzzy_only' %}selected{% endif %}>Always fuzzy search</option>
+          <option value="exact_only" {% if search_mode == 'exact_only' %}selected{% endif %}>Exact matches only</option>
+        </select>
+      </div>
       <button type="submit" class="btn btn-primary">Load Names</button>
     </form>
+    <small class="text-muted d-block mt-2">All modes query active employees only (status_code != 'T').</small>
   </div>
 </div>
+{% endif %}
 
 <div id="adhoc-loading-overlay" class="position-fixed top-0 start-0 w-100 h-100 align-items-center justify-content-center" style="display: none; background-color: rgba(0, 0, 0, 0.45); z-index: 9999;">
   <div class="card text-center p-4" style="min-width: 360px; max-width: 520px;">
@@ -65,6 +79,8 @@
 
       const fileInput = document.getElementById('csv_file');
       const file = fileInput && fileInput.files && fileInput.files[0] ? fileInput.files[0] : null;
+      const searchModeInput = document.getElementById('search_mode');
+      const searchMode = searchModeInput ? searchModeInput.value : 'exact_then_fuzzy';
       const fileName = file ? file.name : 'selected file';
       showAdhocLoading('Loading File', `Uploading ${fileName}...`, 'Preparing data for matching');
 
@@ -73,25 +89,61 @@
         try {
           const text = await file.text();
           const lines = text.split(/\r?\n/).map(line => line.trim()).filter(Boolean);
-          candidateNames = lines.slice(1, 26);
+          candidateNames = lines.slice(1);
         } catch (_) {
           candidateNames = [];
         }
       }
 
+      const candidateCount = candidateNames.length;
+      const exactBatchSize = 200;
+      const exactBatchCount = candidateCount > 0 ? Math.ceil(candidateCount / exactBatchSize) : 0;
       let idx = 0;
       const intervalId = setInterval(() => {
-        if (idx === 0) {
-          showAdhocLoading('Matching Names', 'Searching for employee matches...', 'This can take a moment for larger files');
-        } else if (candidateNames.length > 0 && idx <= candidateNames.length) {
-          const name = candidateNames[idx - 1];
-          showAdhocLoading('Matching Names', 'Searching for employee matches...', `Working on: ${name}`);
+        if (searchMode === 'fuzzy_only') {
+          if (idx === 0 && candidateCount === 0) {
+            showAdhocLoading('Matching Names', 'Searching for employee matches...', 'This can take a moment for larger files');
+          } else {
+            const nameIndex = candidateCount > 0 ? (idx % candidateCount) : 0;
+            const name = candidateCount > 0 ? candidateNames[nameIndex] : '';
+            const progress = candidateCount > 0
+              ? `Working on: ${name} (${nameIndex + 1} of ${candidateCount})`
+              : 'This can take a moment for larger files';
+            showAdhocLoading('Matching Names', 'Searching for employee matches...', progress);
+          }
+          idx += 1;
+          return;
+        }
+
+        // In exact-first modes, lead with explicit batch progress so the UI reflects the
+        // backend behavior (batch exact first, then fuzzy fallback for unresolved names).
+        if (exactBatchCount > 0 && idx < exactBatchCount) {
+          showAdhocLoading(
+            'Exact Match Batch Pass',
+            'Running batched exact-name queries...',
+            `Batch ${idx + 1} of ${exactBatchCount}`
+          );
         } else {
-          showAdhocLoading('Preparing Results', 'Finalizing match table...', 'Almost ready');
-          clearInterval(intervalId);
+          if (searchMode === 'exact_only') {
+            showAdhocLoading(
+              'Preparing Results',
+              'Finalizing exact-match results...',
+              'No fuzzy fallback in this mode'
+            );
+          } else if (candidateCount > 0) {
+            const fuzzyIdx = (idx - exactBatchCount) % candidateCount;
+            const name = candidateNames[fuzzyIdx];
+            showAdhocLoading(
+              'Fuzzy Fallback Pass',
+              'Searching only unresolved names...',
+              `Checking: ${name} (${fuzzyIdx + 1} of ${candidateCount})`
+            );
+          } else {
+            showAdhocLoading('Matching Names', 'Searching for employee matches...', 'This can take a moment for larger files');
+          }
         }
         idx += 1;
-      }, 450);
+      }, 300);
 
       window.addEventListener('pagehide', () => clearInterval(intervalId), { once: true });
 
@@ -102,6 +154,7 @@
 </script>
 
 {% if match_results %}
+
 <div class="row g-3 mb-4">
   <div class="col-md-4">
     <div class="card h-100"><div class="card-body"><div class="text-muted small">Rows Loaded</div><div id="metric-total" class="display-6 fw-semibold"></div></div></div>
@@ -119,6 +172,11 @@
     <div>
       <h5 class="mb-0">Match Review</h5>
       <small>Rows with a single match are preselected. Use the dropdown for ambiguous names.</small>
+      <div class="small text-muted mt-1">
+        Query Time: <span id="timing-query">00:00</span>
+        <span class="mx-1">|</span>
+        Display Time: <span id="timing-display">00:00</span>
+      </div>
     </div>
     <div class="d-flex align-items-center gap-2">
       <select id="match-filter" class="form-select form-select-sm" style="width: 180px;">
@@ -139,6 +197,7 @@
             <th style="width: 40px;">#</th>
             <th>Source Name</th>
             <th>Matched User</th>
+            <th style="width: 180px;">How Matched</th>
             <th style="width: 40%;">Selection</th>
           </tr>
         </thead>
@@ -181,7 +240,8 @@
 </div>
 
 <form id="download-form" method="post" action="{{ url_for('main.adhoc_match_download') }}" hidden>
-  <input type="hidden" name="match_state_json" id="match_state_json">
+  <input type="hidden" name="state_token" id="state_token" value="{{ state_token or '' }}">
+  <input type="hidden" name="selection_overrides_json" id="selection_overrides_json">
   <input type="hidden" name="selected_fields_csv" id="selected_fields_csv">
 </form>
 
@@ -213,11 +273,41 @@
   let currentPage = 0;
   let currentFilter = 'all';
   const matchState = JSON.parse(document.getElementById('match-data').textContent || '{"headers":[],"rows":[]}');
+  const initialSelections = new Map(
+    (matchState.rows || []).map(row => [
+      String(row.row_index),
+      Number.isInteger(row.selected_index) ? row.selected_index : null,
+    ])
+  );
 
   function getSelectedMatch(row) {
     return Number.isInteger(row.selected_index) && row.selected_index >= 0 && row.selected_index < row.matches.length
       ? row.matches[row.selected_index]
       : null;
+  }
+
+  function getMatchMethodLabel(row) {
+    const selected = getSelectedMatch(row);
+    if (!selected) {
+      return 'No Match Selected';
+    }
+
+    const key = String(row.row_index);
+    const initialValue = initialSelections.has(key) ? initialSelections.get(key) : null;
+    const currentValue = Number.isInteger(row.selected_index) ? row.selected_index : null;
+    const isManualSelection = initialValue !== currentValue;
+    const matchSource = row.match_source || '';
+
+    if (matchSource === 'exact') return isManualSelection ? 'Exact Manual Match' : 'Exact Match';
+    if (matchSource === 'fuzzy') return isManualSelection ? 'Fuzzy Manual Match' : 'Fuzzy Auto Match';
+    return isManualSelection ? 'Manual Match' : 'Matched';
+  }
+
+  function formatDuration(mm) {
+    const totalSeconds = Math.max(0, Math.round(mm / 1000));
+    const minutes = String(Math.floor(totalSeconds / 60)).padStart(2, '0');
+    const seconds = String(totalSeconds % 60).padStart(2, '0');
+    return `${minutes}:${seconds}`;
   }
 
   function updateMetrics() {
@@ -248,6 +338,7 @@
 
     tbody.innerHTML = pageRows.map((row, index) => {
       const selected = getSelectedMatch(row);
+      const matchMethodLabel = getMatchMethodLabel(row);
       const options = ['<option value="">Leave blank</option>'].concat(
         row.matches.map((match, matchIndex) => {
           const label = [match.first_name, match.last_name].filter(Boolean).join(' ') || match.username || match.id;
@@ -267,6 +358,7 @@
           <td>
             ${selected ? `<div class="fw-semibold">${[selected.first_name, selected.last_name].filter(Boolean).join(' ')}</div><div class="text-muted small">${[selected.username, selected.email].filter(Boolean).join(' • ')}</div>` : '<span class="text-muted small">No match selected</span>'}
           </td>
+          <td><span class="badge text-bg-light border">${matchMethodLabel}</span></td>
           <td>
             <select class="form-select form-select-sm match-selector" data-row-index="${row.row_index}">
               ${options}
@@ -328,10 +420,31 @@
 
   document.getElementById('submit-download').addEventListener('click', () => {
     const fields = Array.from(document.querySelectorAll('.export-field:checked')).map(input => input.value);
-    document.getElementById('match_state_json').value = JSON.stringify(matchState);
+    const overrides = {};
+    (matchState.rows || []).forEach((row) => {
+      const key = String(row.row_index);
+      const initialValue = initialSelections.has(key) ? initialSelections.get(key) : null;
+      const currentValue = Number.isInteger(row.selected_index) ? row.selected_index : null;
+      if (initialValue !== currentValue) {
+        overrides[key] = currentValue;
+      }
+    });
+    document.getElementById('selection_overrides_json').value = JSON.stringify(overrides);
     document.getElementById('selected_fields_csv').value = fields.join(',');
     document.getElementById('download-form').submit();
   });
+
+  const queryElapsedMs = Number({{ lookup_stats.elapsed_ms if lookup_stats else 0 }});
+  const timingQueryEl = document.getElementById('timing-query');
+  const timingDisplayEl = document.getElementById('timing-display');
+  if (timingQueryEl) {
+    timingQueryEl.textContent = formatDuration(queryElapsedMs);
+  }
+  if (timingDisplayEl) {
+    const navEntry = performance.getEntriesByType('navigation')[0];
+    const renderMs = navEntry ? Math.max(0, navEntry.domContentLoadedEventEnd - navEntry.responseStart) : 0;
+    timingDisplayEl.textContent = formatDuration(renderMs);
+  }
 
   updateMetrics();
   renderTable();
