@@ -17,6 +17,14 @@ Windows (PowerShell):
 irm https://raw.githubusercontent.com/xtraorange/viva-engage-tools/main/scripts/install.ps1 | iex
 ```
 
+The installer clones the repository and sets up a Python virtual environment in:
+```
+%USERPROFILE%\viva-engage-tools
+```
+(e.g. `C:\Users\YourName\viva-engage-tools`)
+
+At the end of installation it will prompt you to press any key to launch the server.
+
 ### Manual install
 
 1. Install Python 3.10+

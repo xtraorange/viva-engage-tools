@@ -101,13 +101,18 @@ Write-Host 'Installing dependencies...' -ForegroundColor Yellow
 & $venvPython -m pip install -r requirements.txt
 
 Write-Section 'Install Complete'
-if ($NoLaunch) {
-    Write-Host 'Install finished. Returning to caller without launching start.bat.' -ForegroundColor Green
-} else {
-    Write-Host 'Launching application...' -ForegroundColor Green
+Write-Host ''
+Write-Host '  Installed to: ' -ForegroundColor Gray -NoNewline
+Write-Host (Get-Location) -ForegroundColor White
+Write-Host ''
 
+if ($NoLaunch) {
+    Write-Host 'Setup finished. Returning to launcher...' -ForegroundColor Green
+} else {
     $startBat = Join-Path (Get-Location) 'start.bat'
     if (Test-Path $startBat) {
+        Write-Host '  Press any key to launch the server, or close this window to exit.' -ForegroundColor Cyan
+        $null = $Host.UI.RawUI.ReadKey('NoEcho,IncludeKeyDown')
         Start-Process -FilePath 'cmd.exe' -ArgumentList '/c', $startBat
     } else {
         Write-Host 'start.bat not found. Navigate to the install folder and double-click start.bat to launch.' -ForegroundColor Yellow
